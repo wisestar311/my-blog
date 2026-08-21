@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Blog</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="js/theme.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a class="site-title" href="index.html">My Blog</a>
+      <button id="theme-toggle" class="theme-toggle" aria-label="다크 모드 전환"></button>
+    </div>
+  </header>
+
+  <main>
+    <a class="back-link" href="index.html">&larr; 목록으로</a>
+    <article id="post-container">
+      <p class="state-message">글을 불러오는 중...</p>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <p>마크다운으로 쓰고, 프레임워크 없이 보여줍니다.</p>
+  </footer>
+
+  <script src="js/markdown.js"></script>
+  <script src="js/post.js"></script>
+  <script>BlogTheme.initThemeToggle("theme-toggle");</script>
+</body>
+</html>
