@@ -211,6 +211,12 @@ main {
   text-decoration: none;
 }
 
+.post-item-title a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
 .post-item-meta {
   color: var(--color-text-secondary);
   font-size: 0.8rem;
