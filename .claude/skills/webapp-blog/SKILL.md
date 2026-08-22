@@ -1,18 +1,13 @@
 ---
 name: webapp-blog
-description: Use when adding, modifying, or reviewing a mini web-app feature (game, editor, tool, etc.) on this static blog. Drives the Plan → Work → Review → Commit subagent cycle from CLAUDE.md, enforces the shared color palette and header/nav pattern, and requires an in-app usage hint on every web-app page.
+description: Use whenever the user asks to add, build, extend, modify, review, or commit a mini web-app feature on this static blog repo — games, editors, calculators, or any interactive page — even if they just say "~게임 만들어줘", "~에디터 추가해줘", "이 프로젝트 방식대로 해줘", or "지금까지 하던 대로 진행해줘" without naming CLAUDE.md or subagents. It drives the mandatory Plan → Work → Review → Commit subagent cycle, the folder structure, the shared css/style.css color tokens, the common header/nav pattern, and the required in-app usage hint. Consult it before starting implementation, and again during review/commit of an already-started feature.
 ---
 
 # webapp-blog
 
-이 스킬은 "My Blog" 정적 블로그에 새로운 미니 웹앱(게임/에디터/툴 등)을 추가하거나
-기존 웹앱을 수정할 때 따르는 작업 하네스다. CLAUDE.md의 규칙을 스킬 형태로 정리한 것이며,
-CLAUDE.md가 갱신되면 이 스킬도 함께 갱신한다.
-
-## 언제 쓰는가
-- 사용자가 블로그에 새 웹앱/게임/에디터/툴 기능을 만들어 달라고 요청할 때
-- 기존 웹앱(2048, Pixel Art 등)을 수정하거나 새 규칙을 소급 적용할 때
-- "이 프로젝트 방식대로", "지금까지 하던 대로" 작업해 달라는 요청
+"My Blog" 정적 블로그에 미니 웹앱(게임/에디터/툴 등)을 추가하거나 수정할 때 따르는 작업
+하네스다. CLAUDE.md의 규칙을 스킬 형태로 정리한 것이며, CLAUDE.md가 갱신되면 이 스킬도
+함께 갱신한다.
 
 ## 프로젝트 구조
 ```
