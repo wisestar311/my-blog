@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2048 - My Blog</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/game.css">
+<script src="js/theme.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a class="site-title" href="index.html">My Blog</a>
+      <nav class="site-nav">
+        <a class="site-nav-link" href="game.html">2048</a>
+      </nav>
+      <button id="theme-toggle" class="theme-toggle" aria-label="다크 모드 전환"></button>
+    </div>
+  </header>
+
+  <main class="game-page">
+    <a class="back-link" href="index.html">&larr; 목록으로</a>
+
+    <div class="game-container">
+      <div class="game-header-row">
+        <h1 class="game-title">2048</h1>
+        <div class="scoreboard">
+          <div class="score-box" id="score-box">
+            <span class="score-label">SCORE</span>
+            <span class="score-value" id="score-value">0</span>
+          </div>
+          <div class="score-box" id="best-box">
+            <span class="score-label">BEST</span>
+            <span class="score-value" id="best-value">0</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="game-controls-row">
+        <p class="game-hint">방향키로 타일을 움직여 합치세요.</p>
+        <button id="new-game-btn" class="new-game-btn">New Game</button>
+      </div>
+
+      <div class="game-board-wrap">
+        <div class="game-board" id="game-board">
+          <div class="grid-cell"></div>
+          <div class="grid-cell"></div>
+          <div class="grid-cell"></div>
+          <div class="grid-cell"></div>
+          <div class="grid-cell"></div>
+          <div class="grid-cell"></div>
+          <div class="grid-cell"></div>
+          <div class="grid-cell"></div>
+          <div class="grid-cell"></div>
+          <div class="grid-cell"></div>
+          <div class="grid-cell"></div>
+          <div class="grid-cell"></div>
+          <div class="grid-cell"></div>
+          <div class="grid-cell"></div>
+          <div class="grid-cell"></div>
+          <div class="grid-cell"></div>
+        </div>
+        <div class="game-overlay" id="game-overlay" hidden>
+          <p class="game-overlay-message" id="game-overlay-message"></p>
+          <button class="new-game-btn" id="overlay-restart-btn">Try Again</button>
+          <button class="game-overlay-secondary" id="overlay-keep-playing-btn" hidden>Keep Playing</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p>마크다운으로 쓰고, 프레임워크 없이 보여줍니다.</p>
+  </footer>
+
+  <script src="js/game.js"></script>
+  <script>BlogTheme.initThemeToggle("theme-toggle");</script>
+</body>
+</html>

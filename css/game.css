@@ -1,0 +1,242 @@
+/* 2048 game page — reuses css/style.css custom properties, no new tokens. */
+
+.game-page {
+  max-width: 440px;
+}
+
+.game-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.game-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.game-title {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: clamp(1.8rem, 8vw, 2.4rem);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+  text-shadow: 0 0 8px var(--glow-lg), 0 0 24px var(--glow-lg);
+}
+
+.scoreboard {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.score-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  min-width: 4.6rem;
+  padding: 0.5rem 0.9rem;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  box-shadow: 0 0 22px -8px var(--glow-lg);
+}
+
+.score-label {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  color: var(--color-text-secondary);
+}
+
+.score-value {
+  font-family: var(--font-mono);
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--accent);
+  text-shadow: 0 0 10px var(--glow-sm);
+}
+
+.game-controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.game-hint {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+}
+
+.new-game-btn {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 0.45rem 1.1rem;
+  cursor: pointer;
+  box-shadow: 0 0 16px -4px var(--glow-sm);
+  transition: box-shadow 0.15s ease;
+}
+
+.new-game-btn:hover {
+  box-shadow: 0 0 20px -2px var(--glow-lg);
+}
+
+.game-board-wrap {
+  position: relative;
+}
+
+.game-board {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  gap: 0.6rem;
+  padding: 0.6rem;
+  aspect-ratio: 1 / 1;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  box-shadow: 0 0 32px -4px var(--glow-lg);
+}
+
+.grid-cell {
+  background: var(--color-code-bg);
+  border-radius: 6px;
+}
+
+/* Tiles are rendered as absolutely-positioned overlays by js/game.js.
+   Value tiers are expressed via the [data-value] attribute selector so the
+   script only needs to set tile.dataset.value = <number>. */
+.tile {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-weight: 800;
+  border-radius: 6px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+
+/* 2 - 4: base tier, no accent emphasis */
+.tile[data-value="2"],
+.tile[data-value="4"] {
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+
+/* 8 - 64: faint accent border */
+.tile[data-value="8"],
+.tile[data-value="16"],
+.tile[data-value="32"],
+.tile[data-value="64"] {
+  border: 1px solid var(--accent);
+  color: var(--color-text);
+}
+
+/* 128 - 512: accent border + glow */
+.tile[data-value="128"],
+.tile[data-value="256"],
+.tile[data-value="512"] {
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 16px -4px var(--glow-lg);
+  text-shadow: 0 0 8px var(--glow-sm);
+}
+
+/* 1024 - 2048+: accent background, inverted */
+.tile[data-value="1024"],
+.tile[data-value="2048"],
+.tile[data-value="4096"],
+.tile[data-value="8192"] {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  color: var(--color-bg);
+  box-shadow: 0 0 28px -2px var(--glow-lg);
+  text-shadow: none;
+}
+
+.game-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  background: color-mix(in srgb, var(--color-bg) 85%, transparent);
+  border-radius: 8px;
+  text-align: center;
+  padding: 1.5rem;
+}
+
+.game-overlay[hidden] {
+  display: none;
+}
+
+.game-overlay-message {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--color-text);
+  text-shadow: 0 0 8px var(--glow-lg), 0 0 24px var(--glow-lg);
+}
+
+.game-overlay-secondary {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 0.45rem 1.1rem;
+  cursor: pointer;
+}
+
+.game-overlay-secondary:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.game-overlay-secondary[hidden] {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .game-container {
+    gap: 0.9rem;
+  }
+
+  .score-box {
+    min-width: 4rem;
+    padding: 0.4rem 0.7rem;
+  }
+
+  .score-value {
+    font-size: 1.3rem;
+  }
+
+  .game-board {
+    max-width: min(92vw, 420px);
+    margin: 0 auto;
+  }
+
+  .game-board-wrap {
+    max-width: min(92vw, 420px);
+    margin: 0 auto;
+  }
+}
