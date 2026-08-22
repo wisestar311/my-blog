@@ -20,6 +20,12 @@
   text-shadow: 0 0 8px var(--glow-lg), 0 0 24px var(--glow-lg);
 }
 
+.pixel-art-hint {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+}
+
 .pixel-art-workspace {
   display: flex;
   align-items: flex-start;
