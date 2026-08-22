@@ -3,8 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>My Blog</title>
+<title>Pixel Art - My Blog</title>
 <link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/pixel-art.css">
 <script src="js/theme.js"></script>
 </head>
 <body>
@@ -19,19 +20,39 @@
     </div>
   </header>
 
-  <main>
+  <main class="pixel-art-page">
     <a class="back-link" href="index.html">&larr; 목록으로</a>
-    <article id="post-container">
-      <p class="state-message">글을 불러오는 중...</p>
-    </article>
+
+    <div class="pixel-art-container">
+      <h1 class="pixel-art-title">Pixel Art</h1>
+
+      <div class="pixel-art-workspace">
+        <div class="canvas-wrap">
+          <canvas id="pixel-canvas" width="512" height="512"></canvas>
+        </div>
+
+        <aside class="pixel-art-sidebar">
+          <div class="palette" id="palette"></div>
+
+          <label class="custom-color-row">
+            <span>Custom</span>
+            <input type="color" id="custom-color-picker" value="#00f0ff">
+          </label>
+
+          <div class="pixel-art-toolbar">
+            <button id="clear-btn" class="new-game-btn">Clear</button>
+            <button id="save-btn" class="new-game-btn">Save PNG</button>
+          </div>
+        </aside>
+      </div>
+    </div>
   </main>
 
   <footer class="site-footer">
     <p>마크다운으로 쓰고, 프레임워크 없이 보여줍니다.</p>
   </footer>
 
-  <script src="js/markdown.js"></script>
-  <script src="js/post.js"></script>
+  <script src="js/pixel-art.js"></script>
   <script>BlogTheme.initThemeToggle("theme-toggle");</script>
 </body>
 </html>

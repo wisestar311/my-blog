@@ -1,104 +1,130 @@
-# Review 결과 — 2048 게임 기능
+# Review 결과 — 픽셀 아트 에디터 기능
 
-## 검증 방식에 대한 중요한 한계 (먼저 명시)
+테스트일: 2026-08-22. `claude-in-chrome` 브라우저 도구가 연결되어 있어 **실제 Chrome 브라우저로
+전체 항목을 검증**했다 (`python3 -m http.server 8000`을 blog 루트에서 띄우고
+`http://localhost:8000/pixel-art.html`을 열어서 테스트, 종료 후 서버 프로세스 종료함).
 
-`claude-in-chrome` 브라우저 도구를 시도했으나 **연결되지 않음**을 확인했다
-(`tabs_context_mcp` 결과: "Browser extension is not connected. Please ensure the
-Claude browser extension is installed and running..."). 따라서 review.md 지침 1~9번의
-실제 브라우저 조작(방향키 입력, New Game 클릭, 새로고침 후 최고점수 유지, 헤더 링크
-클릭 이동, 다크/라이트 테마 토글, 반응형 리사이즈, 콘솔 에러 확인, 강제 game-over/승리
-오버레이 확인)은 **하나도 실제 브라우저에서 수행하지 못했다**. 아래 결과는 전부
-정적 코드 리뷰(spec.md 대조 + game.html/game.js/game.css/style.css/index.html/post.html
-전체 파일 read)로 대체 검증한 것이며, 실제 렌더링/상호작용 검증이 아니라는 점을
-숨기지 않고 밝힌다. 로컬 서버는 브라우저 검증이 불가능했으므로 띄우지 않았다
-(띄울 필요 자체가 없었음).
+## 최종 결론: **Pass**
 
-## 항목별 결과
+spec.md 요구사항을 모두 충족한다. 캔버스 클릭/드래그 페인팅, 팔레트/지우개/커스텀 색상, Clear,
+PNG 내보내기(투명 배경·512x512·정확한 픽셀 색상), 헤더 nav 4파일 일관성, 반응형 레이아웃 모두
+실제 브라우저 렌더링과 픽셀 단위 데이터로 확인했다. 다만 **경미한 버그 1건**을 발견했다(아래
+"발견된 버그" 참조) — 기능을 막지는 않지만 수정 권장.
 
-| # | 항목 | 결과 | 비고 |
-|---|---|---|---|
-| 1 | claude-in-chrome 연결 확인 | 완료 (Fail: 미연결) | 위 참조 |
-| 2 | 방향키 4방향 이동/병합 | 미검증(코드 리뷰로 대체) | `js/game.js` `move()`/`slideAndMergeLine()`가 spec.md 4.2/4.3 알고리즘과 문자 그대로 일치. 4방향 모두 `slideAndMergeLine` 재사용, `getColumn`/`setColumn`으로 전치 처리. 로직 자체는 표준 2048 알고리즘과 일치하며 이상 없음 |
-| 3 | New Game 버튼 | 미검증(코드 리뷰) | `newGameBtn.addEventListener("click", initGame)` 정상 연결, `initGame()`이 spec 4.1 순서(grid 초기화→score/flag 리셋→hideOverlay→spawn x2→render) 그대로 구현됨 |
-| 4 | 점수/최고점수 UI 갱신 및 새로고침 후 유지 | 미검증(코드 리뷰) | `updateBestScore()`가 `score > best`일 때만 `localStorage.setItem("2048-best-score", ...)` 후 `render()`가 `score-value`/`best-value` textContent 갱신. `DOMContentLoaded`에서 `localStorage.getItem`으로 best 복원. 로직상 문제 없음 |
-| 5 | 헤더 "2048" 네비 ↔ "← 목록으로" 상호 이동 | 미검증(코드 리뷰) | `index.html`/`post.html`/`game.html` 모두 `.site-header-inner`에 `<nav class="site-nav"><a class="site-nav-link" href="game.html">2048</a></nav>` 동일하게 삽입되어 있고, `game.html`에 `<a class="back-link" href="index.html">← 목록으로</a>` 존재. href 오타 없음 확인 |
-| 6 | 다크/라이트 테마 토글, 네온 톤 유지 | 미검증(코드 리뷰) | `game.html`도 다른 페이지와 동일하게 `js/theme.js` + `BlogTheme.initThemeToggle("theme-toggle")` 재사용(게임 전용 테마 로직 없음, 코드 공유이므로 동작 방식 자체는 index.html과 동일). `game.css`는 신규 토큰 없이 `style.css`의 `--accent`/`--glow-sm`/`--glow-lg`/`--color-bg-elevated` 등만 참조 |
-| 7 | 반응형(≤768px) | 미검증(코드 리뷰) | `game.css`에 `@media (max-width: 768px)` 블록 존재, 보드/스코어박스 크기 축소 규칙 있음. 시각적으로 실제 안 깨지는지는 브라우저 렌더링 확인이 필요하므로 완전한 보증은 아님 |
-| 8 | 게임오버/승리 오버레이 로직 | 코드 리뷰로 재확인 | 아래 "발견된 이슈" 참고. `window`에 게임 상태가 노출되어 있지 않아(즉시실행함수 클로저 내부) 콘솔에서 `grid`를 강제 조작하는 것 자체가 애초에 불가능함을 코드 확인으로 검증(브라우저 연결 여부와 무관하게 스펙에 정의된 대로 구현되어 있어 발생하는 제약) |
-| 9 | 콘솔 에러 없음 | 미검증 | 브라우저 미연결로 `read_console_messages` 호출 불가 |
-| 10 | 브라우저 미연결 시 대체 검증 명시 | 완료 | 이 문서 전체가 해당 |
+## Force-dark 렌더링 주장 — 독립 재검증 결과: **주장이 맞다 (확인됨)**
 
-## 발견된 이슈
+구현 서브에이전트 B가 "Chrome 프로필의 force-dark 렌더링 때문에 스크린샷 색이 반전되어 보이지만
+코드는 정상"이라고 판단한 것을 직접 재검증했다. 결론: **이 판단은 정확하다.**
 
-1. **(경미) 승리와 게임오버가 같은 이동에서 동시에 발생하는 극단적 케이스에서 오버레이 메시지 충돌**
-   `js/game.js:139-140` — `move()`에서 `checkWin()` 다음에 `checkGameOver()`가 이어서 호출된다.
-   만약 마지막 남은 빈 칸을 채우는 이동이 동시에 2048 타일을 만들고, 그 직후 보드가 꽉 차면서
-   더 이상 병합 가능한 인접 쌍도 없는 경우(이론상 가능, 실전에서는 드묾), `checkWin()`이 먼저
-   `showOverlay("You Win!", true)`를 호출한 뒤 곧바로 `checkGameOver()`가
-   `showOverlay("Game Over", false)`로 덮어써 승리 메시지와 "Keep Playing" 버튼이 사용자에게 보이지
-   않고 즉시 "Game Over"로 대체된다. spec.md 4.4/4.5에는 이 동시 발생 케이스에 대한 우선순위 규정이
-   없어 spec 미준수라 보긴 어렵지만, 실제 플레이에서 "이겼는데 바로 게임오버로 덮인다"는 체감상
-   이상한 UX가 될 수 있다. 심각도는 낮음(발생 확률 매우 낮고 최고점수/점수 자체는 정상 반영됨).
+근거:
+1. 페이지 로드 직후(테마 미지정, localStorage 비어있음) `document.documentElement.getAttribute('data-theme')`
+   는 `null`, `getComputedStyle(html).getPropertyValue('--color-bg')`는 `#ffffff`(라이트 값),
+   `matchMedia('(prefers-color-scheme: dark)').matches`도 `false`였다 — 즉 CSS 커스텀 프로퍼티와
+   OS 설정 모두 "라이트"를 가리킨다.
+2. 그런데 스크린샷은 어두운 배경으로 렌더링되었고, `getComputedStyle(document.body).backgroundColor`도
+   `rgb(24, 26, 27)`(어두운 값)이었다. **동일한 rgb(24,26,27) 값이 명시적으로 `data-theme="dark"`로
+   전환해 `--color-bg`가 `#000000`으로 바뀐 뒤에도 그대로 나타났다** — 즉 라이트/다크 두 경우 모두
+   `backgroundColor`(브라우저가 페인트에 쓰는 계산된 색)가 똑같이 어두운 값으로 강제되고 있었다.
+   이는 커스텀 프로퍼티(`--color-bg` 등, 단순 문자열이라 강제 변환 대상이 아님)는 실제 선언값을
+   정확히 보고하는 반면, 브라우저가 페인트 단계에서 사용하는 `background-color`류 계산값만 다크
+   방향으로 강제 조정되는, Chrome의 "다크 모드 자동 적용(force dark)" 렌더링 특성과 정확히 일치한다.
+3. **결정적 증거**: `#pixel-canvas`는 CSS 배경이 아니라 JS `ctx.fillRect`로 직접 픽셀을 그린다.
+   Chrome의 force-dark는 캔버스 래스터 내용(이미지로 취급)은 건드리지 않는 것으로 알려져 있다.
+   실제로 캔버스를 `getImageData`로 읽으면 스크린샷에서 페이지 전체가 어둡게 보이는 상태에서도
+   캔버스 내부는 정확한 실제 색상 값(라이트 테마일 땐 `rgb(247,247,248)` 등)을 그대로 담고 있었다
+   — 캔버스만 "안 뒤집힌 채" 밝게 보이는 현상 자체가 스크린샷 소스가 페이지 자체가 아니라 브라우저
+   레벨 페인트 보정임을 뒷받침한다.
+4. 테마 토글 버튼을 실제로 클릭해 `localStorage.theme`이 `"dark"`로 저장되고
+   `data-theme="dark"`가 정확히 설정되며, `--color-bg`/`--accent`/glow 등 모든 커스텀 프로퍼티가
+   올바른 다크 값으로 전환되고, 제목/캔버스 테두리에 네온 글로우가 실제로 나타나는 것을 확인했다
+   — **테마 토글 자체는 정상 동작한다.** "다크/라이트 토글이 실제로 안 먹는다"는 식의 진짜 버그는
+   아니었다.
 
-2. **(참고, 버그 아님) 게임 상태가 `window`에 노출되지 않음**
-   `js/game.js:10` 전체가 IIFE(`(function () { "use strict"; ... })()`)로 감싸여 있어 `grid`,
-   `score`, `isGameOver` 등 상태 변수가 전역에 노출되지 않는다. spec.md에는 이를 요구하는 조항이
-   없으므로 캡슐화 자체는 정상적인 설계이지만, 그 결과 review.md 지침 8번이 제안한 "콘솔에서 grid를
-   직접 조작해 game-over/승리 오버레이를 강제 트리거"하는 방식의 수동 테스트가 애초에 불가능하다.
-   향후 QA 편의를 위해 디버그 빌드에서만 `window.__game2048`같은 형태로 상태를 노출하는 것을 고려할
-   수 있으나, 이번 스펙 범위 밖의 개선 제안일 뿐 결함은 아니다.
+결론적으로 서브에이전트 B의 판단(코드 문제 아님, 브라우저 렌더링 설정 문제)은 정확했다. 다만 이
+재검증 과정에서 **아래의 새로운 별개 버그를 하나 발견**했다.
 
-3. **(버그 아님, 확인 완료) 라이트 모드 글로우 미표시는 기존 사이트 관례를 따른 것**
-   `css/style.css:14-15`에서 라이트 테마는 `--glow-sm`/`--glow-lg`가 `transparent`로 정의되어 있어
-   `game.css`의 타일/스코어박스/타이틀 글로우가 라이트 모드에서는 보이지 않는다. 이는 `.hero-title`,
-   `.post-item` 등 기존 사이트 전역에서도 동일하게 나타나는 기존 디자인 패턴(`css/style.css:180-190,
-   216-221` 등)이므로 game.css만의 결함이 아니라 사이트 전체의 의도된 동작이다.
+## 발견된 버그
 
-이 외 로직 검토(이동/병합/스폰/승리/게임오버 판정, DOM id 계약, 헤더 nav 삽입, CSS 변수 재사용
-여부)에서는 spec.md 대비 불일치나 명백한 버그를 발견하지 못했다.
+### [경미] 테마 전환 시 캔버스가 다시 그려지지 않아 색이 뒤섞여 보임
+- 파일: `js/pixel-art.js:38-75` (특히 `getEmptyCellColor()`/`getGridLineColor()`/`renderAll()`),
+  `js/theme.js` (테마 토글 로직)
+- 재현: 페이지 로드(라이트 테마 값으로 캔버스 초기 렌더링) → 헤더의 테마 토글을 눌러 다크로 전환.
+  이때 `--color-bg-elevated`/`--color-border` 등 CSS 변수는 즉시 다크 값(`#0a0a0a`/`#123534`)으로
+  바뀌지만, **이미 그려진 빈 칸/격자선 픽셀은 갱신되지 않고 라이트 테마 시점의 색(`#f7f7f8` 등)을
+  그대로 유지**한다. 실측: 테마를 다크로 바꾼 직후 `ctx.getImageData()`로 확인한 빈 칸 픽셀이
+  `rgb(247,247,248)`(라이트 값)이었고, 동시에 `getComputedStyle(document.documentElement)
+  .getPropertyValue('--color-bg-elevated')`는 이미 `#0a0a0a`(다크 값)를 반환했다 — 상태와 렌더링이
+  어긋난 것을 직접 확인.
+- 원인: `renderAll()`은 `init()`과 Clear 버튼 클릭 시에만 호출된다. `js/theme.js`의 토글 로직은
+  `data-theme` 속성만 바꿀 뿐 `pixel-art.js`에 테마 변경을 알리는 이벤트/콜백이 없어서, 캔버스는
+  테마가 바뀐 뒤에도 다시 칠해질 때까지(사용자가 그 칸을 직접 칠하거나 Clear를 누를 때까지) 이전
+  테마의 색을 그대로 보여준다.
+- 영향: 기능은 정상 동작하지만(칠하기/지우기/내보내기 모두 각자 호출 시점의 최신 색을 정확히
+  사용함 — PNG 내보내기는 `grid` 상태에서 다시 그리므로 영향 없음), **테마를 전환한 직후 화면에
+  라이트/다크 색이 섞인 캔버스가 잠깐(또는 사용자가 손대기 전까지 계속) 보이는 시각적 불일치**가
+  남는다. 사이트 전역에 다크/라이트 토글이 있는 만큼 사용자가 실제로 겪을 수 있는 문제.
+- 권장 수정: `js/theme.js`의 토글 클릭 핸들러(또는 `data-theme` 속성 변화를 감지하는
+  `MutationObserver`)에서 `pixel-art.js`가 노출하는 재렌더 함수를 호출하도록 연결. 간단하게는
+  `pixel-art.js`에서 테마 토글 버튼 클릭에 리스너를 하나 추가해 `renderAll()`을 다시 호출하면 된다.
 
-**추가 조치 (이슈 1 수정 완료):** `js/game.js`의 `checkWin()`이 승리 여부를 boolean으로 반환하도록
-수정하고, `move()`에서 `checkWin()`이 이번 이동에서 새로 승리를 트리거했다면(`justWon === true`)
-같은 이동에서 `checkGameOver()`를 호출하지 않도록 변경했다. 이제 승리 오버레이가 게임오버로 즉시
-덮어써지는 경쟁 상태가 제거되었다.
+**추가 조치 (수정 완료):** `js/pixel-art.js`의 `init()`에 `document.documentElement`의
+`data-theme` 속성 변화를 감지하는 `MutationObserver`를 추가해 테마가 바뀔 때마다 `renderAll()`이
+자동으로 다시 호출되도록 했다. 공용 `js/theme.js`는 수정하지 않고(다른 페이지에 영향 없음)
+`pixel-art.js` 내부에서만 자기완결적으로 해결했다.
 
-## 실제 브라우저 검증 (claude-in-chrome 연결 후 추가 진행)
+## 테스트 항목별 결과
 
-배포된 GitHub Pages 페이지(`https://wisestar311.github.io/my-blog/game.html`)를 실제로 열어
-플레이해본 결과, **심각한 렌더링 버그를 발견했다.**
+1. **claude-in-chrome 연결 확인** — Pass. 연결되어 있어 로컬 서버(`python3 -m http.server 8000`)를
+   띄우고 `http://localhost:8000/pixel-art.html`을 열어 전 항목을 실제 브라우저로 검증했다.
+2. **클릭/드래그 페인팅** — Pass. 실제 마우스 클릭(`computer` 도구)으로 셀이 칠해짐을 스크린샷과
+   `canvas.getImageData()` 픽셀 값(`[0,240,255,255]` = 선택색 정확히 일치)으로 교차 검증. 드래그는
+   합성 `PointerEvent`(`pointerdown`→`pointermove`×15→`pointerup`, `pointerId:1`)로 한 행(16칸)을
+   연속으로 칠해 전 칸이 정확한 색으로 채워짐을 확인(참고: `computer` 도구의 `left_click_drag`는
+   중간 지점을 듬성듬성만 생성해 칸 사이 빈틈이 생겼는데, 이는 자동화 도구의 드래그 이벤트 밀도
+   문제였고, 촘촘한 pointermove 이벤트를 보내면 spec대로 빈틈 없이 칠해지는 것을 확인해 앱 코드
+   자체의 문제가 아님을 확인했다).
+3. **팔레트 선택/지우개/커스텀 색상** — Pass. 스와치 클릭 시 `.selected` 클래스가 정확히 이동함을
+   확인(`aria-label` 및 `dataset.color`로 검증). 지우개로 칠한 칸을 지우면 배경색으로 정확히
+   되돌아감(`getImageData`로 확인). `input[type=color]`에 `input` 이벤트를 발생시키면
+   `selectedColor`가 해당 값으로 바뀌고 실제로 그 색이 캔버스에 칠해짐을 확인(`#123456` → 캔버스
+   픽셀 `rgb(18,52,86)` 정확히 일치).
+   - 부수 발견: 합성 `PointerEvent`에 실제로 활성화된 적 없는 임의의 `pointerId`(예: 2, 99)를 쓰면
+     `canvasEl.setPointerCapture(e.pointerId)`가 `NotFoundError: No active pointer with the given
+     id is found`를 던지고(콘솔에 uncaught exception으로 기록됨, `js/pixel-art.js:95`), 그 결과
+     해당 `pointerdown`에서 `paintAtEvent(e)` 호출이 스킵되어 첫 클릭이 씹히는 현상을 재현했다.
+     **이건 실제 사용자 버그는 아니다** — 진짜 브라우저의 마우스/터치/펜 이벤트는 항상 유효한
+     활성 pointerId를 가지므로 실사용에서는 발생하지 않는다(내 테스트 스크립트가 임의의 가짜
+     pointerId를 써서 유발한 인공적 상황). 다만 `setPointerCapture` 호출을 try/catch로 감싸두면
+     이론상 더 방어적인 코드가 될 수 있다는 점은 참고로 남긴다(우선순위 낮음, 수정 불필요 수준).
+4. **Clear 버튼** — Pass. 클릭 시 캔버스 전체가 현재 테마의 배경색으로 리셋됨을 여러 칸의
+   `getImageData`로 확인.
+5. **Save PNG** — Pass. `URL.createObjectURL`을 가로채 실제 발생한 `Blob`(`type: image/png`,
+   `size: 7235 bytes`)을 캡처해 `createImageBitmap`으로 디코딩 후 검증: 크기 정확히 512x512,
+   칠한 칸들은 정확한 색상(alpha 255), 칠하지 않았거나 지운 칸은 전부 완전 투명(`[0,0,0,0]`)임을
+   여러 좌표에서 픽셀 단위로 확인. spec 6장 요구사항(오프스크린 캔버스, 투명 배경 유지)을 완벽히
+   충족.
+6. **헤더 nav 4파일 일관성** — Pass. `index.html`/`post.html`/`game.html`/`pixel-art.html` 4개
+   파일 모두 `grep`으로 대조한 결과 다음 두 줄이 문자 그대로 동일하게 존재함을 확인:
+   `<a class="site-nav-link" href="game.html">2048</a>` /
+   `<a class="site-nav-link" href="pixel-art.html">Pixel Art</a>`. 브라우저에서도 두 링크가 정확한
+   href로 렌더링됨을 스크린샷으로 확인(클릭 이동은 표준 `<a href>`라 별도 이슈 없음).
+7. **다크/라이트 테마 토글** — Pass(토글 로직 자체는 정상), 단 위에서 기술한 캔버스 재렌더링
+   누락 버그가 있음. force-dark 관련 서브에이전트 B의 판단은 위 "재검증 결과"에서 확인한 대로
+   정확했다.
+8. **반응형(≤768px)** — Pass. `resize_window` 도구가 이 세션에서는 실제 뷰포트 폭을 바꾸지
+   못했지만(요청 폭과 무관하게 `window.innerWidth`가 775px로 고정됨 — 환경 제약, 페이지 버그
+   아님), 375px 폭의 `<iframe>`에 같은 페이지를 로드해 시각적으로 우회 검증했다. 결과: `.pixel-
+   art-workspace`가 `flex-direction: column`으로 정확히 세로 스택되어 캔버스 → 팔레트 → Custom
+   → Clear/Save PNG 순으로 잘림/겹침 없이 표시됨을 스크린샷으로 확인.
+9. **콘솔 에러** — Pass. 정상적인 사용자 흐름(클릭, 드래그, 팔레트, 지우개, 커스텀 색상, Clear,
+   Save PNG, 테마 토글) 전체에서 페이지 자체의 에러/예외는 없었다(광고 차단 확장 프로그램의
+   `[bugsnag] Loaded!` 디버그 로그만 존재, 무관). 항목 3에서 언급한 예외는 내 테스트 스크립트가
+   의도적으로 잘못된 pointerId를 준 인공적 상황에서만 발생했다.
+10. **claude-in-chrome 연결 여부 명시** — 연결되어 있었으므로 정적 코드 리뷰로의 대체는
+    필요하지 않았다. 모든 항목을 실제 브라우저에서 검증했다.
 
-### 발견된 버그 (수정 완료)
-
-**`css/game.css`의 `.tile { position: absolute; }`로 인해 타일이 그리드 셀을 채우지 못하고
-셀 좌상단에 작은 크기(약 12x29px)로만 표시됨.** 위에서 "미검증 항목"으로 예상했던 바로 그
-리스크가 실제로 발생한 것이었다. `.tile`은 `#game-board`(display: grid)의 자식으로
-`grid-column-start`/`grid-row-start` 인라인 스타일만으로 위치가 지정되는데, `position: absolute`가
-붙으면 grid item의 기본 stretch 정렬이 적용되지 않아 콘텐츠 크기로만 렌더링되고 셀을 채우지 못했다.
-16개 `.grid-cell` 자체는 DOM/레이아웃상 정상(4x4, 87.5px 정사각형)이었으나 `--color-bg-elevated`와
-`--color-code-bg`의 색상 차이가 미미해 육안으로는 격자가 거의 안 보였다.
-
-**수정:** `css/game.css`에서 `.tile`의 `position: absolute;` 선언을 제거. grid item은 `position`이
-없으면 기본적으로 `align-self`/`justify-self: stretch`가 적용되어 자동으로 셀을 꽉 채운다.
-
-### 수정 후 재검증 (로컬 서버 + 실제 브라우저, 전부 Pass)
-| 항목 | 결과 |
-|---|---|
-| 타일이 그리드 셀을 정확히 채우고 올바른 칸에 위치 | Pass (수정 후 확인) |
-| → (오른쪽) 이동: 타일이 벽까지 슬라이드, 유효한 이동 시 새 타일 스폰 | Pass |
-| ↓ → ← 연속 이동 후 동일 값 타일 병합, SCORE 정확히 누적(2+2=4) | Pass |
-| New Game 클릭: SCORE 0으로 리셋, BEST는 유지 | Pass |
-| 페이지 새로고침 후 BEST(localStorage `2048-best-score`) 유지 확인 | Pass |
-| 다크 모드 토글: 네온 글로우(cyan accent)로 정상 전환, 격자/타일 모두 스타일 적용 | Pass |
-| 브라우저 콘솔 에러 | 없음 |
-
-승리/게임오버 오버레이 동시 발생 케이스, 반응형(≤768px) 시각 확인은 무작위 실접 플레이로
-재현하기 어려워 이번에도 코드 리뷰 수준에 머물렀으나(로직 자체는 위에서 이미 수정됨), 핵심
-플레이 경험(이동/병합/점수/최고점수/테마)은 실제 브라우저에서 전부 확인되었다.
-
-## 최종 결론
-
-**실제 브라우저 검증까지 마쳤고, 치명적 렌더링 버그 1건을 발견 즉시 수정했다.** 최초 코드 리뷰만으로는
-"조건부 Pass"였으나 실제로는 타일이 정상적으로 보이지도 않는 상태였다 — **정적 코드 리뷰만으로는
-잡아낼 수 없는 버그였고, 반드시 실제 브라우저 확인이 필요하다는 review.md 자체의 경고가 그대로
-들어맞은 사례.** 수정 후 재검증 결과 핵심 기능(이동/병합/점수/최고점수 영속/테마)은 모두 정상
-동작하며, 최종 **Pass**.
+## 참고: 정적 코드 리뷰로 보완한 부분
+- `.pixel-art-workspace`/`.canvas-wrap`/`.pixel-art-sidebar`는 spec 10장이 우려한 "grid 자식에
+  position: absolute" 패턴을 쓰지 않음을 `css/pixel-art.css` 확인으로 재확인(`.canvas-wrap`은
+  `position: relative`이고 grid가 아닌 flex의 자식이며, 그 안에 절대 위치 오버레이도 없음) — 2048
+  때와 같은 버그 클래스는 이 구현에 존재하지 않는다.
