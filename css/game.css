@@ -119,7 +119,6 @@
    Value tiers are expressed via the [data-value] attribute selector so the
    script only needs to set tile.dataset.value = <number>. */
 .tile {
-  position: absolute;
   display: flex;
   align-items: center;
   justify-content: center;
