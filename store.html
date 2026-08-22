@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Store — My Blog</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/store.css">
+<script src="js/theme.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a class="site-title" href="index.html">My Blog</a>
+      <nav class="site-nav">
+        <a class="site-nav-link" href="game.html">2048</a>
+        <a class="site-nav-link" href="pixel-art.html">Pixel Art</a>
+        <a class="site-nav-link" href="store.html">Store</a>
+      </nav>
+      <button id="theme-toggle" class="theme-toggle" aria-label="다크 모드 전환"></button>
+    </div>
+  </header>
+
+  <main class="store-page">
+    <a class="back-link" href="index.html">&larr; 목록으로</a>
+
+    <div class="store-topbar">
+      <a href="store.html" class="store-topbar-brand">Store</a>
+      <nav class="store-topbar-nav">
+        <a href="store.html" class="store-topbar-link">상품</a>
+        <a href="cart.html" class="store-topbar-link" id="store-cart-link">
+          장바구니<span class="store-cart-count" id="store-cart-count" aria-label="장바구니 담긴 수량">0</span>
+        </a>
+      </nav>
+    </div>
+
+    <div class="store-list-container">
+      <h1 class="store-title">Store</h1>
+      <p class="store-hint">카테고리로 필터링하고 가격순으로 정렬해서 상품을 둘러보세요. 상품을 클릭하면 상세 정보를 볼 수 있어요.</p>
+
+      <div class="store-controls">
+        <div class="store-filter-group" id="store-filter-group" role="group" aria-label="카테고리 필터">
+          <button type="button" class="store-filter-btn is-active" data-category="all">전체</button>
+        </div>
+        <label class="store-sort-row">
+          <span>정렬</span>
+          <select class="store-sort-select" id="store-sort-select">
+            <option value="default">기본순</option>
+            <option value="price-asc">가격 낮은순</option>
+            <option value="price-desc">가격 높은순</option>
+          </select>
+        </label>
+      </div>
+
+      <ul class="store-grid" id="store-grid"></ul>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p>마크다운으로 쓰고, 프레임워크 없이 보여줍니다.</p>
+  </footer>
+
+  <script src="js/products-data.js"></script>
+  <script src="js/cart-store.js"></script>
+  <script src="js/store.js" defer></script>
+  <script>BlogTheme.initThemeToggle("theme-toggle");</script>
+</body>
+</html>

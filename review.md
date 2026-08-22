@@ -1,130 +1,84 @@
-# Review 결과 — 픽셀 아트 에디터 기능
+# review.md — Store 기능 통합 검증 (Review 단계)
 
-테스트일: 2026-08-22. `claude-in-chrome` 브라우저 도구가 연결되어 있어 **실제 Chrome 브라우저로
-전체 항목을 검증**했다 (`python3 -m http.server 8000`을 blog 루트에서 띄우고
-`http://localhost:8000/pixel-art.html`을 열어서 테스트, 종료 후 서버 프로세스 종료함).
+Plan → Work → **Review** → Commit 사이클의 Review 단계 산출물. 이전 5개 Work
+서브에이전트(0: 기반, 1: 목록, 2: 상세, 3: 장바구니, 4: 결제)의 산출물이 하나로
+합쳐졌을 때 실제로 잘 맞물리는지를 중심으로 검증했다.
 
-## 최종 결론: **Pass**
+## 테스트 방법
 
-spec.md 요구사항을 모두 충족한다. 캔버스 클릭/드래그 페인팅, 팔레트/지우개/커스텀 색상, Clear,
-PNG 내보내기(투명 배경·512x512·정확한 픽셀 색상), 헤더 nav 4파일 일관성, 반응형 레이아웃 모두
-실제 브라우저 렌더링과 픽셀 단위 데이터로 확인했다. 다만 **경미한 버그 1건**을 발견했다(아래
-"발견된 버그" 참조) — 기능을 막지는 않지만 수정 권장.
+- **브라우저 자동화**: `mcp__claude-in-chrome__tabs_context_mcp`(`createIfEmpty: true`)를
+  시도했으나 "Browser extension is not connected" 응답. 이전 서브에이전트들이 보고한 대로
+  이 환경에서는 Chrome 확장 연결이 불가능함을 재확인했다. **실제 클릭 기반의 브라우저
+  검증(다크모드 토글 포함)은 수행하지 못했다** — 이는 이 review의 명확한 한계다.
+- **정적 서버 + curl**: `python3 -m http.server 8792`로 저장소를 서빙하고, 4개 신규
+  페이지(쿼리스트링 포함 `product.html?id=P1`, `product.html?id=BAD` 케이스 포함)와
+  `css/store.css`, 6개 신규 `js/*.js` 파일 전부 200 응답 확인.
+- **Node 통합 시뮬레이션**: `js/products-data.js` + `js/cart-store.js`를 Node `vm` 모듈로
+  격리된 컨텍스트에 로드하고, 공유 객체를 실제 브라우저의 localStorage처럼 사용해 여러
+  "페이지 로드"(각각 새 vm 컨텍스트)에 걸쳐 다음 시나리오를 하나로 이어서 검증:
+  1. (product.html 컨텍스트) P1×2 담기 → P4×1 담기 → P1 재담기(+1) → 같은 상품은 신규 행이
+     아니라 qty 누적(3)되는지
+  2. (cart.html 컨텍스트, 새 vm) 같은 localStorage에서 정확히 그 상태를 읽어내는지 →
+     `updateQty`로 P4 증가(2) → P1을 0까지 감소시켜 자동 삭제되는지 → `getTotalPrice`
+     재계산이 맞는지
+  3. (checkout.html 컨텍스트, 새 vm) 같은 장바구니를 읽어 합계를 clearCart **이전에** 변수로
+     캡처 → clearCart 후 합계가 0이 되는지
+  4. (cart.html 재오픈, 새 vm) 장바구니/배지가 0으로 보이는지
+  5. localStorage 값이 깨진 JSON / 배열이 아닌 JSON일 때 예외 없이 `[]`로 폴백하는지
+  결과: **전부 통과** (스크립트와 실행 로그는 스크래치패드에 보관, 결론만 기록).
+- 정적 코드 대조(grep/Read)로 나머지 체크리스트 항목(헤더 nav, CSS 커버리지, toast 코드,
+  정규식, try/catch, aria-label, 사용법 문구, node --check) 확인.
 
-## Force-dark 렌더링 주장 — 독립 재검증 결과: **주장이 맞다 (확인됨)**
+## 체크리스트 결과
 
-구현 서브에이전트 B가 "Chrome 프로필의 force-dark 렌더링 때문에 스크린샷 색이 반전되어 보이지만
-코드는 정상"이라고 판단한 것을 직접 재검증했다. 결론: **이 판단은 정확하다.**
+| # | 항목 | 결과 |
+|---|---|---|
+| 1 | 헤더 nav byte-identical (8개 파일) | **통과** — `site-header-inner`부터 `</header>`까지 8개 파일 전부 동일 (Store 링크 포함) |
+| 2 | 전체 플로우 연결(목록→상세→담기→장바구니→결제→클리어) | **통과** — Node 통합 시뮬레이션으로 localStorage 데이터가 컨텍스트(=페이지) 경계를 넘어 정확히 이어짐을 확인. addItem 누적, updateQty 0=삭제, getTotalPrice, clearCart 전후 합계 캡처 순서 모두 spec대로 동작 |
+| 3 | CSS 커버리지 | **통과** — 4개 페이지 HTML + 4개 페이지 JS가 사용하는 모든 클래스를 `class=` 문자열 grep으로 추출해 `css/store.css` 정의와 대조. store.css에 없는 것은 전부 `css/style.css`가 이미 정의한 공용 클래스(`back-link`, `site-*`, `state-message`, `theme-toggle`)이거나 `.qty-btn`/`.qty-value` 베이스 클래스에 결합되는 수식자 클래스(`.cart-qty-increase` 등)로, 누락 아님 |
+| 4 | `.store-grid` 자식에 `position:absolute` 금지 | **통과** — `css/store.css`에서 `position:`은 `.store-topbar-link`(relative)와 `.store-toast`(fixed, 그리드 밖 별도 요소) 두 곳뿐. `.store-card`류에 absolute 없음 |
+| 5 | toast race condition 수정 확인 | **통과** — `js/product.js`의 `showToast()`가 실제로 매 호출 시작 시 이전 `toastHideTimer`/`toastFinalizeTimer`를 `clearTimeout`하고 이전 `transitionend` 리스너를 `removeEventListener`한 뒤 새로 시작함을 코드로 확인. `transitionend` 미발생 대비 300ms 폴백 타이머도 있어 연속 클릭 시 토스트가 중간에 사라지거나 멈추지 않음 |
+| 6 | 결제 폼 검증 정규식 | **통과** — `js/checkout.js`의 우편번호(`/^\d{5}$/`), 카드번호(`/^\d{13,19}$/`, 공백 제거 후), 유효기간(`/^(0[1-9]|1[0-2])\/\d{2}$/`), CVC(`/^\d{3,4}$/`) 전부 spec.md 5.5 표와 정확히 일치. 이름/주소도 trim 후 1자 이상 규칙 일치 |
+| 7 | localStorage try/catch | **통과** — `js/cart-store.js`의 `readCart`/`writeCart` 모두 try/catch로 감싸져 있고, 파싱 실패·비배열 값 모두 `[]`로 폴백(Node 시뮬레이션으로 실제 동작도 재확인) |
+| 8 | 접근성 기초 | **통과** — 수량 버튼(`aria-label="수량 감소/증가"`), 카트 삭제 버튼(`aria-label="{상품명} 삭제"`), 카테고리 필터 그룹(`role="group" aria-label="카테고리 필터"`), 결제 폼 전 필드가 `<label>`로 감싸짐, 헤더 배지(`aria-label="장바구니 담긴 수량"`) 모두 확인 |
+| 9 | `.store-hint` 문구 일치 | **통과** — 4개 페이지(정적 3개 + product.js가 주입하는 1개) 전부 spec.md 8번 섹션 문구와 완전히 일치 |
+| 10 | `node --check` 문법 검사 | **통과** — `cart-store.js`, `products-data.js`, `store.js`, `product.js`, `cart.js`, `checkout.js` 전부 오류 없음 |
 
-근거:
-1. 페이지 로드 직후(테마 미지정, localStorage 비어있음) `document.documentElement.getAttribute('data-theme')`
-   는 `null`, `getComputedStyle(html).getPropertyValue('--color-bg')`는 `#ffffff`(라이트 값),
-   `matchMedia('(prefers-color-scheme: dark)').matches`도 `false`였다 — 즉 CSS 커스텀 프로퍼티와
-   OS 설정 모두 "라이트"를 가리킨다.
-2. 그런데 스크린샷은 어두운 배경으로 렌더링되었고, `getComputedStyle(document.body).backgroundColor`도
-   `rgb(24, 26, 27)`(어두운 값)이었다. **동일한 rgb(24,26,27) 값이 명시적으로 `data-theme="dark"`로
-   전환해 `--color-bg`가 `#000000`으로 바뀐 뒤에도 그대로 나타났다** — 즉 라이트/다크 두 경우 모두
-   `backgroundColor`(브라우저가 페인트에 쓰는 계산된 색)가 똑같이 어두운 값으로 강제되고 있었다.
-   이는 커스텀 프로퍼티(`--color-bg` 등, 단순 문자열이라 강제 변환 대상이 아님)는 실제 선언값을
-   정확히 보고하는 반면, 브라우저가 페인트 단계에서 사용하는 `background-color`류 계산값만 다크
-   방향으로 강제 조정되는, Chrome의 "다크 모드 자동 적용(force dark)" 렌더링 특성과 정확히 일치한다.
-3. **결정적 증거**: `#pixel-canvas`는 CSS 배경이 아니라 JS `ctx.fillRect`로 직접 픽셀을 그린다.
-   Chrome의 force-dark는 캔버스 래스터 내용(이미지로 취급)은 건드리지 않는 것으로 알려져 있다.
-   실제로 캔버스를 `getImageData`로 읽으면 스크린샷에서 페이지 전체가 어둡게 보이는 상태에서도
-   캔버스 내부는 정확한 실제 색상 값(라이트 테마일 땐 `rgb(247,247,248)` 등)을 그대로 담고 있었다
-   — 캔버스만 "안 뒤집힌 채" 밝게 보이는 현상 자체가 스크린샷 소스가 페이지 자체가 아니라 브라우저
-   레벨 페인트 보정임을 뒷받침한다.
-4. 테마 토글 버튼을 실제로 클릭해 `localStorage.theme`이 `"dark"`로 저장되고
-   `data-theme="dark"`가 정확히 설정되며, `--color-bg`/`--accent`/glow 등 모든 커스텀 프로퍼티가
-   올바른 다크 값으로 전환되고, 제목/캔버스 테두리에 네온 글로우가 실제로 나타나는 것을 확인했다
-   — **테마 토글 자체는 정상 동작한다.** "다크/라이트 토글이 실제로 안 먹는다"는 식의 진짜 버그는
-   아니었다.
+## 직접 고친 버그
 
-결론적으로 서브에이전트 B의 판단(코드 문제 아님, 브라우저 렌더링 설정 문제)은 정확했다. 다만 이
-재검증 과정에서 **아래의 새로운 별개 버그를 하나 발견**했다.
+1. **`checkout.html`의 스켈레톤 잔여 주석 제거** — `<!-- SCREEN CONTENT: checkout -->` 주석이
+   4번 서브에이전트 작업 후에도 지워지지 않고 남아 있었음(다른 3개 페이지에는 없음). 기능에
+   영향은 없는 순수 잔여물이지만 스켈레톤 placeholder가 최종 산출물에 남아있으면 안 되므로
+   제거. `checkout.html` 37번째 줄 삭제.
 
-## 발견된 버그
+그 외에는 구조적 버그, id/class 불일치, 잘못된 스크립트 순서를 발견하지 못했다.
 
-### [경미] 테마 전환 시 캔버스가 다시 그려지지 않아 색이 뒤섞여 보임
-- 파일: `js/pixel-art.js:38-75` (특히 `getEmptyCellColor()`/`getGridLineColor()`/`renderAll()`),
-  `js/theme.js` (테마 토글 로직)
-- 재현: 페이지 로드(라이트 테마 값으로 캔버스 초기 렌더링) → 헤더의 테마 토글을 눌러 다크로 전환.
-  이때 `--color-bg-elevated`/`--color-border` 등 CSS 변수는 즉시 다크 값(`#0a0a0a`/`#123534`)으로
-  바뀌지만, **이미 그려진 빈 칸/격자선 픽셀은 갱신되지 않고 라이트 테마 시점의 색(`#f7f7f8` 등)을
-  그대로 유지**한다. 실측: 테마를 다크로 바꾼 직후 `ctx.getImageData()`로 확인한 빈 칸 픽셀이
-  `rgb(247,247,248)`(라이트 값)이었고, 동시에 `getComputedStyle(document.documentElement)
-  .getPropertyValue('--color-bg-elevated')`는 이미 `#0a0a0a`(다크 값)를 반환했다 — 상태와 렌더링이
-  어긋난 것을 직접 확인.
-- 원인: `renderAll()`은 `init()`과 Clear 버튼 클릭 시에만 호출된다. `js/theme.js`의 토글 로직은
-  `data-theme` 속성만 바꿀 뿐 `pixel-art.js`에 테마 변경을 알리는 이벤트/콜백이 없어서, 캔버스는
-  테마가 바뀐 뒤에도 다시 칠해질 때까지(사용자가 그 칸을 직접 칠하거나 Clear를 누를 때까지) 이전
-  테마의 색을 그대로 보여준다.
-- 영향: 기능은 정상 동작하지만(칠하기/지우기/내보내기 모두 각자 호출 시점의 최신 색을 정확히
-  사용함 — PNG 내보내기는 `grid` 상태에서 다시 그리므로 영향 없음), **테마를 전환한 직후 화면에
-  라이트/다크 색이 섞인 캔버스가 잠깐(또는 사용자가 손대기 전까지 계속) 보이는 시각적 불일치**가
-  남는다. 사이트 전역에 다크/라이트 토글이 있는 만큼 사용자가 실제로 겪을 수 있는 문제.
-- 권장 수정: `js/theme.js`의 토글 클릭 핸들러(또는 `data-theme` 속성 변화를 감지하는
-  `MutationObserver`)에서 `pixel-art.js`가 노출하는 재렌더 함수를 호출하도록 연결. 간단하게는
-  `pixel-art.js`에서 테마 토글 버튼 클릭에 리스너를 하나 추가해 `renderAll()`을 다시 호출하면 된다.
+## 고치지 않고 남겨둔 이슈 (판단 필요)
 
-**추가 조치 (수정 완료):** `js/pixel-art.js`의 `init()`에 `document.documentElement`의
-`data-theme` 속성 변화를 감지하는 `MutationObserver`를 추가해 테마가 바뀔 때마다 `renderAll()`이
-자동으로 다시 호출되도록 했다. 공용 `js/theme.js`는 수정하지 않고(다른 페이지에 영향 없음)
-`pixel-art.js` 내부에서만 자기완결적으로 해결했다.
+- **비-defer 인라인 스크립트가 defer 스크립트보다 먼저 실행됨**: 4개 페이지 모두
+  `<script src="js/xxx.js" defer></script>` 다음에 `<script>BlogTheme.initThemeToggle(...)</script>`
+  (인라인, defer 없음)가 온다. HTML 파싱 규칙상 defer 스크립트는 문서 파싱이 끝난 뒤
+  실행되고, src 없는 인라인 스크립트는 만나는 즉시(동기) 실행되므로, 실제 실행 순서는
+  소스상 순서와 반대로 `BlogTheme.initThemeToggle`이 `store.js`/`product.js`/`cart.js`/
+  `checkout.js`보다 먼저 실행된다. 이번 기능에서는 테마 토글과 카트/스토어 로직이 서로
+  의존하지 않아 실제 동작에 문제를 일으키지는 않지만, 기존 `game.html`/`pixel-art.html`에서도
+  동일한 패턴을 그대로 물려받은 것으로 보여 스토어 기능만의 버그는 아니다. 스토어 4개 파일
+  범위를 벗어나는 전역 컨벤션 문제이므로 직접 고치지 않고 기록만 남긴다.
+- **브라우저 실제 렌더링/다크모드 토글/실제 클릭 인터랙션 미검증**: Chrome 확장 미연결로
+  인해 실제 화면에서 카드 hover, 토스트 트랜지션 애니메이션, 다크모드 전환 시 레이아웃 유지
+  여부, 반응형 브레이크포인트(768px) 실제 렌더링은 코드 대조로만 확인했고 스크린샷/픽셀
+  단위 검증은 하지 못했다. 이 환경의 구조적 한계이며, 추후 Chrome 확장이 연결되는 환경에서
+  1회 재검증을 권장한다(코드상으로는 CSS 변수만 사용해 라이트/다크 자동 대응하도록 되어
+  있어 위험도는 낮다고 판단).
 
-## 테스트 항목별 결과
+## 최종 결론
 
-1. **claude-in-chrome 연결 확인** — Pass. 연결되어 있어 로컬 서버(`python3 -m http.server 8000`)를
-   띄우고 `http://localhost:8000/pixel-art.html`을 열어 전 항목을 실제 브라우저로 검증했다.
-2. **클릭/드래그 페인팅** — Pass. 실제 마우스 클릭(`computer` 도구)으로 셀이 칠해짐을 스크린샷과
-   `canvas.getImageData()` 픽셀 값(`[0,240,255,255]` = 선택색 정확히 일치)으로 교차 검증. 드래그는
-   합성 `PointerEvent`(`pointerdown`→`pointermove`×15→`pointerup`, `pointerId:1`)로 한 행(16칸)을
-   연속으로 칠해 전 칸이 정확한 색으로 채워짐을 확인(참고: `computer` 도구의 `left_click_drag`는
-   중간 지점을 듬성듬성만 생성해 칸 사이 빈틈이 생겼는데, 이는 자동화 도구의 드래그 이벤트 밀도
-   문제였고, 촘촘한 pointermove 이벤트를 보내면 spec대로 빈틈 없이 칠해지는 것을 확인해 앱 코드
-   자체의 문제가 아님을 확인했다).
-3. **팔레트 선택/지우개/커스텀 색상** — Pass. 스와치 클릭 시 `.selected` 클래스가 정확히 이동함을
-   확인(`aria-label` 및 `dataset.color`로 검증). 지우개로 칠한 칸을 지우면 배경색으로 정확히
-   되돌아감(`getImageData`로 확인). `input[type=color]`에 `input` 이벤트를 발생시키면
-   `selectedColor`가 해당 값으로 바뀌고 실제로 그 색이 캔버스에 칠해짐을 확인(`#123456` → 캔버스
-   픽셀 `rgb(18,52,86)` 정확히 일치).
-   - 부수 발견: 합성 `PointerEvent`에 실제로 활성화된 적 없는 임의의 `pointerId`(예: 2, 99)를 쓰면
-     `canvasEl.setPointerCapture(e.pointerId)`가 `NotFoundError: No active pointer with the given
-     id is found`를 던지고(콘솔에 uncaught exception으로 기록됨, `js/pixel-art.js:95`), 그 결과
-     해당 `pointerdown`에서 `paintAtEvent(e)` 호출이 스킵되어 첫 클릭이 씹히는 현상을 재현했다.
-     **이건 실제 사용자 버그는 아니다** — 진짜 브라우저의 마우스/터치/펜 이벤트는 항상 유효한
-     활성 pointerId를 가지므로 실사용에서는 발생하지 않는다(내 테스트 스크립트가 임의의 가짜
-     pointerId를 써서 유발한 인공적 상황). 다만 `setPointerCapture` 호출을 try/catch로 감싸두면
-     이론상 더 방어적인 코드가 될 수 있다는 점은 참고로 남긴다(우선순위 낮음, 수정 불필요 수준).
-4. **Clear 버튼** — Pass. 클릭 시 캔버스 전체가 현재 테마의 배경색으로 리셋됨을 여러 칸의
-   `getImageData`로 확인.
-5. **Save PNG** — Pass. `URL.createObjectURL`을 가로채 실제 발생한 `Blob`(`type: image/png`,
-   `size: 7235 bytes`)을 캡처해 `createImageBitmap`으로 디코딩 후 검증: 크기 정확히 512x512,
-   칠한 칸들은 정확한 색상(alpha 255), 칠하지 않았거나 지운 칸은 전부 완전 투명(`[0,0,0,0]`)임을
-   여러 좌표에서 픽셀 단위로 확인. spec 6장 요구사항(오프스크린 캔버스, 투명 배경 유지)을 완벽히
-   충족.
-6. **헤더 nav 4파일 일관성** — Pass. `index.html`/`post.html`/`game.html`/`pixel-art.html` 4개
-   파일 모두 `grep`으로 대조한 결과 다음 두 줄이 문자 그대로 동일하게 존재함을 확인:
-   `<a class="site-nav-link" href="game.html">2048</a>` /
-   `<a class="site-nav-link" href="pixel-art.html">Pixel Art</a>`. 브라우저에서도 두 링크가 정확한
-   href로 렌더링됨을 스크린샷으로 확인(클릭 이동은 표준 `<a href>`라 별도 이슈 없음).
-7. **다크/라이트 테마 토글** — Pass(토글 로직 자체는 정상), 단 위에서 기술한 캔버스 재렌더링
-   누락 버그가 있음. force-dark 관련 서브에이전트 B의 판단은 위 "재검증 결과"에서 확인한 대로
-   정확했다.
-8. **반응형(≤768px)** — Pass. `resize_window` 도구가 이 세션에서는 실제 뷰포트 폭을 바꾸지
-   못했지만(요청 폭과 무관하게 `window.innerWidth`가 775px로 고정됨 — 환경 제약, 페이지 버그
-   아님), 375px 폭의 `<iframe>`에 같은 페이지를 로드해 시각적으로 우회 검증했다. 결과: `.pixel-
-   art-workspace`가 `flex-direction: column`으로 정확히 세로 스택되어 캔버스 → 팔레트 → Custom
-   → Clear/Save PNG 순으로 잘림/겹침 없이 표시됨을 스크린샷으로 확인.
-9. **콘솔 에러** — Pass. 정상적인 사용자 흐름(클릭, 드래그, 팔레트, 지우개, 커스텀 색상, Clear,
-   Save PNG, 테마 토글) 전체에서 페이지 자체의 에러/예외는 없었다(광고 차단 확장 프로그램의
-   `[bugsnag] Loaded!` 디버그 로그만 존재, 무관). 항목 3에서 언급한 예외는 내 테스트 스크립트가
-   의도적으로 잘못된 pointerId를 준 인공적 상황에서만 발생했다.
-10. **claude-in-chrome 연결 여부 명시** — 연결되어 있었으므로 정적 코드 리뷰로의 대체는
-    필요하지 않았다. 모든 항목을 실제 브라우저에서 검증했다.
+체크리스트 10개 항목 전부 통과, 발견한 유일한 실물 버그는 잔여 주석 1건으로 직접 수정
+완료했다. Node 기반 통합 시뮬레이션으로 5개 서브에이전트의 산출물이 localStorage를 매개로
+정확히 연결됨(담기 → 수량변경/삭제 → 합계 → 결제완료 → 초기화까지 체인 전체)을 확인했고,
+헤더 nav byte-identical, CSS 전체 클래스 커버리지, 알려진 버그 클래스(그리드+absolute) 회피,
+toast race condition 수정, 폼 검증 정규식, localStorage 방어, 접근성 기초, 사용법 문구까지
+모두 spec.md와 일치한다.
 
-## 참고: 정적 코드 리뷰로 보완한 부분
-- `.pixel-art-workspace`/`.canvas-wrap`/`.pixel-art-sidebar`는 spec 10장이 우려한 "grid 자식에
-  position: absolute" 패턴을 쓰지 않음을 `css/pixel-art.css` 확인으로 재확인(`.canvas-wrap`은
-  `position: relative`이고 grid가 아닌 flex의 자식이며, 그 안에 절대 위치 오버레이도 없음) — 2048
-  때와 같은 버그 클래스는 이 구현에 존재하지 않는다.
+**이 기능은 커밋해도 되는 상태다.** 다만 위 "고치지 않고 남겨둔 이슈" 중 실제 브라우저
+검증 공백은 구조적 한계로 남아있음을 커밋 메시지나 후속 작업 메모에 남겨두는 것을 권장한다.

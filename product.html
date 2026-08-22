@@ -3,8 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>My Blog</title>
+<title>상품 상세 — My Blog</title>
 <link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/store.css">
 <script src="js/theme.js"></script>
 </head>
 <body>
@@ -20,19 +21,33 @@
     </div>
   </header>
 
-  <main>
+  <main class="store-page">
     <a class="back-link" href="index.html">&larr; 목록으로</a>
-    <article id="post-container">
-      <p class="state-message">글을 불러오는 중...</p>
-    </article>
+
+    <div class="store-topbar">
+      <a href="store.html" class="store-topbar-brand">Store</a>
+      <nav class="store-topbar-nav">
+        <a href="store.html" class="store-topbar-link">상품</a>
+        <a href="cart.html" class="store-topbar-link" id="store-cart-link">
+          장바구니<span class="store-cart-count" id="store-cart-count" aria-label="장바구니 담긴 수량">0</span>
+        </a>
+      </nav>
+    </div>
+
+    <div class="product-detail" id="product-detail">
+      <!-- JS가 내용을 주입 -->
+    </div>
+
+    <div class="store-toast" id="store-toast" role="status" aria-live="polite" hidden></div>
   </main>
 
   <footer class="site-footer">
     <p>마크다운으로 쓰고, 프레임워크 없이 보여줍니다.</p>
   </footer>
 
-  <script src="js/markdown.js"></script>
-  <script src="js/post.js"></script>
+  <script src="js/products-data.js"></script>
+  <script src="js/cart-store.js"></script>
+  <script src="js/product.js" defer></script>
   <script>BlogTheme.initThemeToggle("theme-toggle");</script>
 </body>
 </html>

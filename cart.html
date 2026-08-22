@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>장바구니 — My Blog</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/store.css">
+<script src="js/theme.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a class="site-title" href="index.html">My Blog</a>
+      <nav class="site-nav">
+        <a class="site-nav-link" href="game.html">2048</a>
+        <a class="site-nav-link" href="pixel-art.html">Pixel Art</a>
+        <a class="site-nav-link" href="store.html">Store</a>
+      </nav>
+      <button id="theme-toggle" class="theme-toggle" aria-label="다크 모드 전환"></button>
+    </div>
+  </header>
+
+  <main class="store-page">
+    <a class="back-link" href="index.html">&larr; 목록으로</a>
+
+    <div class="store-topbar">
+      <a href="store.html" class="store-topbar-brand">Store</a>
+      <nav class="store-topbar-nav">
+        <a href="store.html" class="store-topbar-link">상품</a>
+        <a href="cart.html" class="store-topbar-link" id="store-cart-link">
+          장바구니<span class="store-cart-count" id="store-cart-count" aria-label="장바구니 담긴 수량">0</span>
+        </a>
+      </nav>
+    </div>
+
+    <div class="cart-page-container">
+      <h1 class="store-title">장바구니</h1>
+      <p class="store-hint">수량을 바꾸거나 삭제할 수 있어요. 합계를 확인한 뒤 결제하기를 눌러주세요.</p>
+
+      <p id="cart-empty-state" class="state-message" hidden>장바구니가 비어 있습니다. <a href="store.html">쇼핑 계속하기</a></p>
+
+      <ul class="cart-list" id="cart-list"></ul>
+
+      <div class="cart-summary" id="cart-summary" hidden>
+        <div class="cart-summary-row">
+          <span>합계</span>
+          <span class="cart-summary-total" id="cart-total">$0.00</span>
+        </div>
+        <a href="checkout.html" class="store-btn store-btn-primary cart-checkout-link" id="checkout-link">결제하기</a>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p>마크다운으로 쓰고, 프레임워크 없이 보여줍니다.</p>
+  </footer>
+
+  <script src="js/products-data.js"></script>
+  <script src="js/cart-store.js"></script>
+  <script src="js/cart.js" defer></script>
+  <script>BlogTheme.initThemeToggle("theme-toggle");</script>
+</body>
+</html>

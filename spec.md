@@ -1,374 +1,547 @@
-# 픽셀 아트 에디터 기능 spec
+# spec.md — Store (Apple Store 느낌의 미니멀 온라인 스토어)
 
-> 이 문서는 이전 2048 게임 기능의 spec.md를 대체한다. 2048 스펙 내용은 히스토리(git log)로만
-> 남기고, 이 문서는 신규 기능인 "픽셀 아트 에디터"만 다룬다.
+Plan 단계 산출물. CLAUDE.md의 작업 사이클(Plan → Work → Review → Commit)에 따라 작성.
+**사용자 승인 전까지 Work 단계로 진행하지 않는다.**
+
+---
 
 ## 1. 개요
 
-기존 마크다운 블로그(프레임워크 없는 순수 HTML/CSS/JS)에 16x16 픽셀 아트 에디터 페이지를
-추가한다. `pixel-art.html`이라는 신규 페이지에서 사용자는 16x16 격자의 각 칸("도트")을
-클릭하거나 드래그해서 원하는 색으로 칠할 수 있고, 프리셋 색상 팔레트(+커스텀 색상 선택기)로
-색을 고르며, 완성한 그림을 PNG 파일로 저장할 수 있다. 시각적으로는 기존 네온 사이버펑크
-테마(`--color-bg`/`--color-bg-elevated`/`--accent`/`--glow-sm`/`--glow-lg`/`--font-mono` 등
-`css/style.css`의 커스텀 프로퍼티)를 그대로 재사용해 `game.html`과 동일한 톤을 유지한다.
+Apple Store 스타일의 미니멀 온라인 스토어 목업을 블로그에 추가한다. 실제 결제/백엔드는
+없고, 전부 정적 HTML + localStorage 기반 프론트엔드 목업이다.
 
-핵심 설계 결정(상세 근거는 4장):
-- 그리기 표면은 **256개의 개별 DOM 셀이 아니라 단일 `<canvas>` 엘리먼트**로 구현한다.
-  PNG 내보내기 요구사항과 직접 맞아떨어지고(캔버스는 `toBlob`/`toDataURL`로 즉시 PNG를
-  뽑아낼 수 있음), 2048 리뷰(review.md)에서 발견된 "CSS Grid 자식에 `position: absolute`를
-  주면 grid의 기본 stretch 정렬이 깨져 타일이 셀을 채우지 못하는" 버그 클래스를 애초에
-  구조적으로 겪을 수 없는 방식이기도 하다.
-- 캔버스 내부 해상도를 처음부터 "칸당 32px"로 두어(16 × 32 = 512px 정사각형), 화면에 보이는
-  캔버스 자체가 이미 내보내기에 쓸 수 있는 해상도를 가진다. 다만 실제 export는 보이는 캔버스를
-  그대로 찍지 않고, 투명 배경을 살리기 위해 별도의 오프스크린 캔버스에 다시 그려서 만든다(6장).
+페이지 4개(신규):
 
-## 2. 생성/수정 파일
+| 파일 | 역할 |
+|---|---|
+| `store.html` | 상품 목록 — 카테고리 필터, 가격순 정렬 |
+| `product.html` | 상품 상세 — 장바구니 담기 + toast |
+| `cart.html` | 장바구니 — 수량 변경, 삭제, 합계 |
+| `checkout.html` | 결제 — 배송지/결제 폼 + 주문 완료 화면 |
 
-| 경로 | 종류 | 내용 |
-|---|---|---|
-| `pixel-art.html` | 신규 | 에디터 페이지 마크업. `index.html`/`game.html`과 동일한 `<head>` 구조(`css/style.css`, `js/theme.js`), 공용 헤더, 캔버스/팔레트/툴바 마크업, footer, 스크립트 태그 |
-| `css/pixel-art.css` | 신규 | 에디터 전용 스타일(캔버스 래퍼, 팔레트 스와치, 툴바 버튼). `css/game.css`와 같은 분리 패턴 — `style.css`의 커스텀 프로퍼티만 참조하고 새 색상 토큰은 만들지 않는다 |
-| `js/pixel-art.js` | 신규 | 그리드 상태, 캔버스 렌더링, 클릭/드래그 페인팅, 팔레트 선택, Clear, PNG 내보내기 로직 |
-| `index.html` | 수정 | `.site-header-inner` 안 `.site-nav`에 `pixel-art.html`로 가는 링크 추가 (기존 "2048" 링크 뒤) |
-| `post.html` | 수정 | 동일하게 헤더 nav에 링크 추가 |
-| `game.html` | 수정 | 동일하게 헤더 nav에 링크 추가 (2048 페이지 헤더에도 사이트 전역 일관성을 위해 반영) |
-| `pixel-art.html` (자기 자신) | — | 자기 헤더에도 동일한 nav(2048 + Pixel Art 둘 다) 포함 — 2048 페이지가 자기 자신의 nav에도 "2048" 링크를 그대로 두는 기존 관례(review.md 기준 정상 동작 확인됨)를 그대로 따른다 |
-| `css/style.css` | 수정 없음(예상) | `.site-nav`/`.site-nav-link`는 이미 존재하는 공용 클래스이므로 링크 `<a>` 태그만 늘어난다. 3개 이상 링크가 되어도 `.site-nav`가 이미 `display: flex; gap: 0.6rem`이므로 자동으로 가로 나열됨 — 별도 수정 불필요. (구현 중 실제로 줄바꿈/좁은 화면에서 깨지면 `css/style.css`의 `.site-nav`/`@media (max-width: 768px)` 블록에 최소 수정 허용) |
+기존 웹앱(2048, Pixel Art)과 동일하게 공용 헤더(`site-header`)를 포함하고, 헤더 nav에
+"Store" 링크가 새로 추가된다(→ `store.html`로 연결). 4개 페이지는 서로 이동 가능한
+자체 서브 내비게이션("store-topbar")을 헤더 아래에 둔다(장바구니 개수 배지 포함).
 
-`pixel-art.html`은 `<head>`에서 `css/style.css` 다음에 `css/pixel-art.css`를 추가로 로드한다
-(`game.html`이 `css/game.css`를 로드하는 것과 동일한 패턴).
+화면이 4개이므로 CLAUDE.md 규칙("화면이 3개 이상이면 화면별로 서브에이전트를 나눈다")에
+따라 Work 단계는 화면별로 서브에이전트를 나눈다 (자세한 내용은 9번 섹션).
 
-## 3. 데이터 모델 / 상태 설계
+---
 
-```js
-// js/pixel-art.js 내부 상태 (IIFE 클로저, game.js와 동일한 패턴)
-const GRID_SIZE = 16;      // 16 x 16
-const CELL_PX = 32;        // 캔버스 1칸 = 32 물리 픽셀 (캔버스 전체 512 x 512)
+## 2. 파일 목록
 
-let grid = [];              // 16x16 2차원 배열. 각 셀은 색상 문자열("#rrggbb") 또는 null(빈 칸/투명)
-let selectedColor = PALETTE_COLORS[0]; // 현재 선택된 색상 (7장 참조)
-let isErasing = false;      // 지우개(= null 칠하기) 모드 여부
-let isPointerDown = false;  // 드래그 페인팅 중인지
-```
+### 신규 파일
+- `store.html`
+- `product.html`
+- `cart.html`
+- `checkout.html`
+- `css/store.css` — 4개 페이지가 공유하는 스토어 전용 스타일시트 (style.css 변수만 참조, 완전히 독립적/자기완결적이어야 함 — 다른 feature css(game.css 등)에 의존하지 않는다. 예: `pixel-art.html`이 `.new-game-btn`을 쓰지만 `pixel-art.css`엔 그 정의가 없어 스타일이 깨지는 기존 사례가 있음. store.css는 자체 버튼 클래스(`.store-btn` 등)를 직접 정의해서 이 문제를 반복하지 않는다.)
+- `js/cart-store.js` — 장바구니 상태 관리 공용 모듈 (localStorage 읽기/쓰기, `window.CartStore`)
+- `js/products-data.js` — 샘플 상품 10개 카탈로그 (`window.STORE_PRODUCTS`)
+- `js/store.js` — 목록 페이지 로직(필터/정렬/렌더링)
+- `js/product.js` — 상세 페이지 로직(URL id 조회, 담기, toast)
+- `js/cart.js` — 장바구니 페이지 로직(수량/삭제/합계)
+- `js/checkout.js` — 결제 페이지 로직(폼 검증, 주문 완료)
 
-- `grid[row][col]`: 2048의 `grid[row][col]` 패턴을 그대로 따른다. 값은 hex 색상 문자열이거나,
-  칠해지지 않은 칸을 뜻하는 `null`.
-- 기본/빈 색상: `null` — 화면 캔버스에는 시각적 구분을 위해 옅은 격자색(`--color-bg-elevated`를
-  `getComputedStyle`로 읽은 값)으로 채워 그리지만, 이 값은 상태에는 저장되지 않는다(순수 렌더링용).
-  PNG로 내보낼 때 `null` 칸은 **투명**으로 남긴다(6장).
-- `selectedColor`: 사용자가 팔레트 스와치 또는 커스텀 색상 피커에서 고른 마지막 색. 페이지 로드
-  시 기본값은 팔레트의 첫 번째 색(7장에서 정의하는 `PALETTE_COLORS[0]`, 사이트 accent 색과
-  맞춘 네온 시안 계열 권장).
-- 지우개는 별도 boolean이 아니라 "팔레트의 특수 스와치 하나가 `selectedColor = null`을 설정하는
-  것"으로 통일한다(8장 UI에서 "Eraser" 스와치로 노출). 이러면 페인팅 함수가 지우개 여부를 따로
-  분기하지 않고 `grid[row][col] = selectedColor` 한 줄로 칠하기/지우기를 동시에 처리한다.
-- 로컬스토리지 영속은 이번 스펙 범위 밖(요구사항에 없음) — 새로고침 시 빈 캔버스로 시작한다.
+### 수정 파일 (nav에 "Store" 링크 추가만)
+- `index.html`
+- `post.html`
+- `game.html`
+- `pixel-art.html`
 
-## 4. UI / 레이아웃 계획
+---
 
-### 4.1 그리기 표면: `<canvas>` vs 256개 DOM 셀 — `<canvas>` 채택
+## 3. 데이터 모델
 
-**결론: `<canvas id="pixel-canvas">` 단일 엘리먼트로 그린다.** 이유:
-
-1. **PNG 내보내기와 직결.** 캔버스는 `canvas.toBlob(cb, "image/png")` / `toDataURL("image/png")`로
-   즉시 PNG를 얻을 수 있다. DOM 셀 256개 방식이면 각 셀의 배경색을 읽어 별도로 `<canvas>`에
-   다시 그려 넣는 변환 단계가 어차피 필요하므로, 처음부터 캔버스로 그리는 편이 코드가 하나 줄고
-   "그리기 상태"와 "내보내기 상태"가 항상 동기화되어 있음을 보장하기 쉽다.
-2. **2048 리뷰에서 나온 버그 클래스를 구조적으로 회피.** `review.md`에 기록된 실제 프로덕션
-   버그: `css/game.css`의 `.tile { position: absolute; }`가 `display: grid` 부모 안에서 grid
-   아이템의 기본 `stretch` 정렬을 깨서 타일이 셀을 채우지 못하고 좌상단에 작게 렌더링되는
-   문제가 배포 후에야 발견되었다. 16x16 = 256개의 DOM 셀 + 절대 위치 오버레이 방식을 쓰면
-   구조적으로 동일한 함정(그리드 아이템에 `position: absolute`를 걸거나, 셀 크기를 % 기반으로
-   맞추다 서브픽셀 오차가 생기는 등)에 다시 빠질 위험이 있다. `<canvas>` 방식은 애초에 CSS
-   Grid나 각 셀의 DOM 박스 모델에 의존하지 않고 좌표 계산(픽셀 단위 `fillRect`)만으로 렌더링하므로
-   이 문제 자체가 발생할 수 없다 — 이번 설계에서 캔버스를 고른 것은 성능뿐 아니라 **이 버그
-   클래스를 원천적으로 피하기 위한 의도적 선택**이다.
-3. **성능/단순성.** 256개의 DOM 엘리먼트에 각각 리스너나 스타일을 관리하는 것보다 캔버스 픽셀
-   좌표 계산 한 곳에서 처리하는 것이 코드량이 적다.
-
-(만약 이후 다른 사유로 DOM 셀 방식으로 바뀐다면, 셀은 `display: grid`의 자식으로 두되
-`position: absolute`/`fixed`를 걸지 않고 `grid-column`/`grid-row`만으로 배치해야 하며, 절대
-위치가 꼭 필요하면 grid 부모가 아니라 별도 `position: relative` 래퍼 위에 얹는 방식으로 stretch
-정렬 이슈를 피해야 한다 — 10장 참조.)
-
-### 4.2 페이지 구조
-
-```
-<header class="site-header">           (공용 헤더, nav에 2048 + Pixel Art 링크)
-<main class="pixel-art-page">
-  <a class="back-link" href="index.html">&larr; 목록으로</a>
-
-  <div class="pixel-art-container">
-    <h1 class="pixel-art-title">Pixel Art</h1>   <!-- font-mono, glow, hero-title/game-title과 톤 일치 -->
-
-    <div class="pixel-art-workspace">
-      <div class="canvas-wrap">
-        <canvas id="pixel-canvas" width="512" height="512"></canvas>
-      </div>
-
-      <aside class="pixel-art-sidebar">
-        <div class="palette" id="palette">
-          <!-- PALETTE_COLORS 개수만큼 button.palette-swatch 반복 생성 (JS) -->
-          <button class="palette-swatch" data-color="#00f0ff" style="background:#00f0ff" aria-label="색상 선택"></button>
-          ...
-          <button class="palette-swatch palette-swatch-eraser" data-color="" aria-label="지우개"></button>
-        </div>
-
-        <label class="custom-color-row">
-          <span>Custom</span>
-          <input type="color" id="custom-color-picker" value="#00f0ff">
-        </label>
-
-        <div class="pixel-art-toolbar">
-          <button id="clear-btn" class="new-game-btn">Clear</button>
-          <button id="save-btn" class="new-game-btn">Save PNG</button>
-        </div>
-      </aside>
-    </div>
-  </div>
-</main>
-<footer class="site-footer">...</footer>   (기존 footer 재사용)
-```
-
-- `.pixel-art-title`, `#clear-btn`/`#save-btn`(`.new-game-btn` 클래스 재사용)은 `game.html`의
-  `.game-title`/`.new-game-btn`과 동일한 시각 언어(폰트, glow, pill 버튼)를 그대로 물려받는다.
-- `.canvas-wrap`: `.game-board-wrap`처럼 `background: var(--color-bg-elevated)`,
-  `border: 1px solid var(--accent)`, `border-radius: 8px`,
-  `box-shadow: 0 0 32px -4px var(--glow-lg)`로 카드 톤을 맞춘다. 캔버스 자체(`#pixel-canvas`)는
-  내부 해상도 512x512를 유지하되 CSS로 `width: 100%; max-width: 480px; height: auto;
-  image-rendering: pixelated;`를 줘서 반응형으로 축소되어도 픽셀 경계가 흐려지지 않게 한다.
-- `.palette`: `display: flex; flex-wrap: wrap; gap: 0.5rem;` (기존 `.tag-list`와 유사한 레이아웃).
-  스와치는 `width/height: 1.75rem`, `border-radius: 4px`, `border: 1px solid var(--color-border)`,
-  선택된 스와치는 `border-color: var(--accent); box-shadow: 0 0 10px -2px var(--glow-lg)`로 표시
-  (JS가 `.palette-swatch.selected` 클래스를 토글).
-- 좁은 화면(`@media (max-width: 768px)`)에서는 `.pixel-art-workspace`를 `flex-direction: column`으로
-  바꿔 캔버스 아래에 사이드바(팔레트+툴바)가 오도록 한다 — `css/game.css`의 기존 반응형 패턴과
-  동일한 접근.
-
-## 5. 그리기 인터랙션 (클릭 · 드래그 페인팅)
-
-Pointer Events API(`pointerdown`/`pointermove`/`pointerup`)를 사용한다. 마우스/펜/터치를
-동일 코드로 처리할 수 있어 마우스 요구사항을 만족시키면서 터치도 사실상 공짜로 따라오지만,
-**터치 전용 UX 튜닝(핀치 줌 방지, 스크롤과의 제스처 충돌 처리 등)은 이번 스펙 범위 밖**이며
-동작이 자연스럽지 않아도 별도 수정하지 않는다.
+### 3.1 상품 스키마 (`js/products-data.js`)
 
 ```js
-canvasEl.addEventListener("pointerdown", function (e) {
-  if (e.button !== 0) return;              // 주 버튼(좌클릭)만 처리
-  isPointerDown = true;
-  canvasEl.setPointerCapture(e.pointerId);  // 캔버스 밖으로 나가도 move/up 이벤트를 계속 받기 위함
-  paintAtEvent(e);
-});
-
-canvasEl.addEventListener("pointermove", function (e) {
-  if (!isPointerDown) return;
-  if ((e.buttons & 1) === 0) {              // 안전망: 버튼이 눌려있지 않으면(예: 캔버스 밖에서 mouseup 놓침) 중단
-    isPointerDown = false;
-    return;
-  }
-  paintAtEvent(e);
-});
-
-canvasEl.addEventListener("pointerup", function () {
-  isPointerDown = false;
-});
-canvasEl.addEventListener("pointercancel", function () {
-  isPointerDown = false;
-});
-```
-
-- `setPointerCapture`를 pointerdown 시점에 걸어두면, 드래그 도중 커서가 캔버스 경계를 벗어나도
-  같은 캔버스가 계속 `pointermove`/`pointerup` 이벤트를 받는다 — "여러 셀에 걸친 드래그"와
-  "주 버튼이 눌린 채인지"를 창(window) 레벨 리스너 없이 캔버스 하나로 안정적으로 처리하는 핵심
-  장치. 추가로 `e.buttons & 1` 체크를 pointermove에서 한 번 더 해서, 브라우저 포커스 전환 등으로
-  pointerup을 놓친 극단적 케이스에서도 계속 칠해지는 버그를 막는다.
-- `paintAtEvent(e)`:
-  ```js
-  function paintAtEvent(e) {
-    const rect = canvasEl.getBoundingClientRect();
-    const scaleX = canvasEl.width / rect.width;   // CSS로 축소 표시되는 경우 보정
-    const scaleY = canvasEl.height / rect.height;
-    const col = Math.floor((e.clientX - rect.left) * scaleX / CELL_PX);
-    const row = Math.floor((e.clientY - rect.top) * scaleY / CELL_PX);
-    if (row < 0 || row >= GRID_SIZE || col < 0 || col >= GRID_SIZE) return; // 캔버스 밖으로 드래그된 경우 무시
-    paintCell(row, col);
-  }
-
-  function paintCell(row, col) {
-    if (grid[row][col] === selectedColor) return; // 이미 같은 색이면 재렌더 스킵
-    grid[row][col] = selectedColor;
-    drawCell(row, col); // 캔버스 전체가 아니라 해당 1칸만 다시 그림(성능)
-  }
-  ```
-- `getBoundingClientRect()` 기반 스케일 보정을 반드시 넣는다 — 캔버스 내부 해상도(512x512)와
-  CSS 표시 크기(`max-width: 480px` 등 반응형으로 달라짐)가 다르기 때문에, 좌표를 그대로 쓰면
-  좁은 화면에서 클릭 위치와 칠해지는 칸이 어긋난다.
-- 클릭(드래그 없이 1회) 페인팅은 pointerdown 한 번만으로 이미 `paintAtEvent`가 호출되므로 별도
-  처리가 필요 없다 — click-to-paint와 drag-to-paint가 동일한 코드 경로를 공유한다.
-
-## 6. PNG 내보내기 방식
-
-화면에 보이는 `#pixel-canvas`를 그대로 캡처하지 않는다(빈 칸이 `--color-bg-elevated`로 채워져
-있어서 그대로 내보내면 투명 배경이 아니라 회색/검은 배경이 찍힘). 대신 저장 버튼 클릭 시
-**오프스크린 캔버스를 새로 만들어 그 위에 그린 뒤** 그것을 내보낸다:
-
-```js
-const EXPORT_CELL_PX = 32; // 칸당 내보내기 픽셀 크기 → 최종 PNG = 16 * 32 = 512 x 512
-
-function exportPNG() {
-  const exportCanvas = document.createElement("canvas");
-  exportCanvas.width = GRID_SIZE * EXPORT_CELL_PX;
-  exportCanvas.height = GRID_SIZE * EXPORT_CELL_PX;
-  const ctx = exportCanvas.getContext("2d");
-  ctx.imageSmoothingEnabled = false;
-
-  for (let row = 0; row < GRID_SIZE; row++) {
-    for (let col = 0; col < GRID_SIZE; col++) {
-      const color = grid[row][col];
-      if (color === null) continue; // 투명으로 남김 (fillRect 생략)
-      ctx.fillStyle = color;
-      ctx.fillRect(col * EXPORT_CELL_PX, row * EXPORT_CELL_PX, EXPORT_CELL_PX, EXPORT_CELL_PX);
-    }
-  }
-
-  exportCanvas.toBlob(function (blob) {
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "pixel-art.png";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  }, "image/png");
-}
-
-document.getElementById("save-btn").addEventListener("click", exportPNG);
-```
-
-- **스케일 팩터 결정: 칸당 32x32 물리 픽셀, 최종 PNG 512x512.** 16x16 그대로 내보내면 파일이
-  실질적으로 너무 작아 확인/공유가 불편하므로, 화면 편집용 캔버스와 동일한 `CELL_PX`(4장) 값을
-  그대로 내보내기에도 재사용해 일관성을 유지한다(값이 달라야 할 이유가 없으면 상수 하나
-  `CELL_PX = EXPORT_CELL_PX = 32`로 통일해도 무방 — 편집 캔버스 해상도와 내보내기 해상도를
-  같은 상수로 두면 두 곳의 그리기 함수(`drawCell`/`exportPNG`의 루프)가 로직을 그대로 공유할 수
-  있다는 장점도 있다).
-- `toBlob` + `URL.createObjectURL` + 임시 `<a download>` 클릭 패턴을 쓴다(`toDataURL`도 동작은
-  하지만 큰 이미지에서 base64 문자열 생성 비용이 더 크므로 `toBlob`을 기본으로 채택. 512x512
-  정도 크기에서는 사실 어느 쪽이든 체감 차이는 거의 없다).
-- 빈 칸(`null`)은 `fillRect`를 아예 호출하지 않아 캔버스 기본값인 투명(alpha 0)으로 남는다 —
-  PNG는 알파 채널을 지원하므로 자연스럽게 투명 배경 PNG가 만들어진다.
-
-## 7. 색상 팔레트 설계
-
-`js/pixel-art.js` 최상단에 상수 배열로 정의한다. 총 20색(프리셋) + 지우개 1개 + 커스텀 피커.
-
-```js
-const PALETTE_COLORS = [
-  "#00f0ff", // accent (사이트 네온 시안)
-  "#ffffff", "#c8c8c8", "#7f7f7f", "#1a1a1a", "#000000", // 그레이스케일
-  "#ff3b30", "#ff9500", "#ffcc00",                        // 빨강/주황/노랑
-  "#34c759", "#0a7a3d",                                    // 초록/진초록
-  "#0aa3a3", "#0057ff", "#5b2bff",                         // 청록/파랑/보라
-  "#ff2d95", "#ff6fb0",                                    // 마젠타/핑크
-  "#8b5a2b", "#c68642", "#ffd8b1",                         // 갈색/살구/살구밝은톤
-  "#00ffa2",                                                // 네온 그린 포인트
+// js/products-data.js
+window.STORE_PRODUCTS = [
+  {
+    id: "P1",
+    name: "...",
+    category: "...",       // 아래 카테고리 목록 중 하나
+    price: 000.00,          // 숫자, 소수 둘째자리, USD
+    image: "https://images.unsplash.com/photo-...?w=600&q=80",
+    description: "..."
+  },
+  // ...
 ];
 ```
 
-- 20개 프리셋은 무채색(흰/회/검) + 기본 색상환 + 사이트 accent 톤(`#00f0ff`, `#0aa3a3`)을
-  섞어, 사이트 테마와 어울리면서도 일반적인 픽셀 아트(캐릭터, 아이콘)에 필요한 피부톤/갈색 계열도
-  포함하도록 구성했다.
-- **지우개 스와치**: 팔레트 마지막에 `data-color=""`인 특수 버튼을 하나 추가(`.palette-swatch-eraser`
-  클래스로 체커보드 패턴 배경을 CSS `background-image`로 표현). 클릭 시 `selectedColor = null`.
-- **커스텀 색상 피커: 포함한다.** `<input type="color" id="custom-color-picker">`는 네이티브
-  UI라 구현 비용이 사실상 0에 가깝고(브라우저 기본 색상 선택 다이얼로그를 그대로 사용), 20색
-  프리셋으로 커버 안 되는 색을 사용자가 직접 고를 수 있게 해준다.
-  ```js
-  customColorPickerEl.addEventListener("input", function (e) {
-    selectedColor = e.target.value;
-    clearPaletteSelection(); // 프리셋 스와치의 .selected 표시를 모두 해제
-  });
-  ```
-- 팔레트 렌더링: 페이지 로드 시 `PALETTE_COLORS.forEach`로 `#palette`에 버튼을 동적 생성하고,
-  각 버튼에 `pointerdown`(또는 `click`) 리스너로 `selectedColor = e.target.dataset.color`,
-  `.selected` 클래스 갱신.
+`store.html`, `product.html`, `cart.html`(선택), `checkout.html`(선택)에서 이 스크립트를
+`js/cart-store.js`보다 먼저 로드한다.
 
-## 8. 사이트 통합 지점 (헤더 nav)
+### 3.2 카테고리 목록 (6개)
 
-`site-nav`에 "2048" 링크 뒤로 "Pixel Art" 링크를 추가한다. 순서는 기능이 추가된 시간 순(2048이
-먼저 만들어졌으므로 먼저 배치)을 그대로 따른다:
+`오디오`, `웨어러블`, `컴퓨터`, `액세서리`, `카메라`, `라이프스타일`
+
+목록 페이지의 "전체" 필터는 별도 가상 카테고리 `all`로 처리(상품 데이터에는 없음).
+
+### 3.3 샘플 상품 10개 (그대로 사용)
+
+| id | name | category | price | image | description |
+|---|---|---|---|---|---|
+| P1 | 오버이어 헤드폰 | 오디오 | 549.00 | `https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&q=80` | 몰입감 있는 액티브 노이즈 캔슬링과 최대 20시간 재생을 지원하는 오버이어 헤드폰. |
+| P2 | 미니멀 스마트워치 | 웨어러블 | 399.00 | `https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&q=80` | 심박수와 활동량을 추적하는 알루미늄 케이스 스마트워치. |
+| P3 | 울트라씬 노트북 | 컴퓨터 | 1299.00 | `https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=600&q=80` | 무게 1.1kg, 두께 12mm의 올데이 배터리 울트라씬 노트북. |
+| P4 | 무선 블루투스 스피커 | 오디오 | 249.00 | `https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?w=600&q=80` | 360도 사운드와 방수 설계를 갖춘 휴대용 무선 스피커. |
+| P5 | 기계식 키보드 | 액세서리 | 179.00 | `https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=600&q=80` | 저소음 스위치와 알루미늄 상판을 적용한 기계식 키보드. |
+| P6 | 무선 마우스 | 액세서리 | 99.00 | `https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?w=600&q=80` | 정밀한 트래킹과 인체공학적 그립의 무선 마우스. |
+| P7 | 미러리스 카메라 | 카메라 | 899.00 | `https://images.unsplash.com/photo-1502920917128-1aa500764cbd?w=600&q=80` | 풀프레임 감성의 센서를 탑재한 컴팩트 미러리스 카메라. |
+| P8 | 미니멀 스니커즈 | 라이프스타일 | 129.00 | `https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600&q=80` | 깔끔한 실루엣의 데일리 미니멀 스니커즈. |
+| P9 | 가죽 백팩 | 라이프스타일 | 219.00 | `https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=600&q=80` | 노트북 수납이 가능한 풀그레인 가죽 백팩. |
+| P10 | 클래식 선글라스 | 라이프스타일 | 159.00 | `https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=600&q=80` | UV400 렌즈를 적용한 클래식 아세테이트 선글라스. |
+
+주의: Unsplash 이미지 URL은 형식(실제 Unsplash 도메인 + photo id + 쿼리스트링)만
+검증했고 각 URL의 실제 로딩 여부까지 보장하지는 않는다. Work 단계에서 `<img>`에
+`onerror`로 대체 텍스트(예: 상품명 이니셜)나 `background: var(--color-bg-elevated)`
+placeholder를 깔아두면 깨진 이미지가 있어도 레이아웃이 무너지지 않는다(권장, 필수는 아님).
+
+### 3.4 장바구니 localStorage 스키마
+
+- 키: `"storeCart"`
+- 값: JSON 문자열로 직렬화된 배열
+
+```js
+// localStorage.getItem("storeCart") 파싱 결과
+[
+  { id: "P1", name: "오버이어 헤드폰", price: 549.00, image: "https://...", qty: 2 },
+  { id: "P4", name: "무선 블루투스 스피커", price: 249.00, image: "https://...", qty: 1 }
+]
+```
+
+카트 아이템은 담을 당시 상품 정보를 스냅샷으로 저장한다(이름/가격/이미지 포함) —
+`cart.html`, `checkout.html`은 `products-data.js` 없이도 장바구니만으로 렌더링 가능.
+
+---
+
+## 4. UI/마크업 구조
+
+모든 스토어 페이지 공통 `<main>` 구조 (헤더/푸터는 기존 페이지와 byte-identical, 아래는
+`<main>` 내부):
+
+```html
+<main class="store-page">
+  <a class="back-link" href="index.html">&larr; 목록으로</a>
+
+  <div class="store-topbar">
+    <a href="store.html" class="store-topbar-brand">Store</a>
+    <nav class="store-topbar-nav">
+      <a href="store.html" class="store-topbar-link">상품</a>
+      <a href="cart.html" class="store-topbar-link" id="store-cart-link">
+        장바구니<span class="store-cart-count" id="store-cart-count" aria-label="장바구니 담긴 수량">0</span>
+      </a>
+    </nav>
+  </div>
+
+  <!-- 페이지별 콘텐츠 -->
+</main>
+```
+
+`#store-cart-count`는 모든 스토어 페이지의 자체 스크립트가 로드 시
+`CartStore.getTotalCount()`로 채운다(각 페이지 JS가 직접 DOM에 반영 — cart-store.js는
+DOM을 건드리지 않는 순수 상태 모듈).
+
+### 4.1 `store.html` — 목록 페이지
+
+```html
+<div class="store-list-container">
+  <h1 class="store-title">Store</h1>
+  <p class="store-hint">카테고리로 필터링하고 가격순으로 정렬해서 상품을 둘러보세요. 상품을 클릭하면 상세 정보를 볼 수 있어요.</p>
+
+  <div class="store-controls">
+    <div class="store-filter-group" id="store-filter-group" role="group" aria-label="카테고리 필터">
+      <button type="button" class="store-filter-btn is-active" data-category="all">전체</button>
+      <!-- STORE_PRODUCTS의 고유 category마다 버튼 하나, data-category="오디오" 등. JS가 동적 생성 -->
+    </div>
+    <label class="store-sort-row">
+      <span>정렬</span>
+      <select class="store-sort-select" id="store-sort-select">
+        <option value="default">기본순</option>
+        <option value="price-asc">가격 낮은순</option>
+        <option value="price-desc">가격 높은순</option>
+      </select>
+    </label>
+  </div>
+
+  <ul class="store-grid" id="store-grid"></ul>
+</div>
+```
+
+`js/store.js`가 `#store-grid`에 렌더링하는 카드 하나:
+
+```html
+<li class="store-card" data-id="P1" data-category="오디오">
+  <a class="store-card-link" href="product.html?id=P1">
+    <div class="store-card-image-wrap">
+      <img class="store-card-image" src="..." alt="오버이어 헤드폰" loading="lazy">
+    </div>
+    <div class="store-card-body">
+      <span class="store-card-category">오디오</span>
+      <h2 class="store-card-name">오버이어 헤드폰</h2>
+      <p class="store-card-price">$549.00</p>
+    </div>
+  </a>
+</li>
+```
+
+빈 결과(필터 결과 0개) 시: `<li class="state-message">해당 카테고리 상품이 없습니다.</li>`
+(기존 `.state-message` 클래스 재사용 — style.css에 이미 정의됨).
+
+### 4.2 `product.html` — 상세 페이지
+
+```html
+<div class="product-detail" id="product-detail">
+  <!-- JS가 아래 내용을 주입하거나, id 없음/id 매칭 실패 시 not-found 표시 -->
+</div>
+
+<div class="store-toast" id="store-toast" role="status" aria-live="polite" hidden></div>
+```
+
+정상 케이스에 `#product-detail`에 주입되는 내용:
+
+```html
+<div class="product-detail-media">
+  <img class="product-detail-image" id="product-image" src="..." alt="">
+</div>
+<div class="product-detail-info">
+  <span class="product-detail-category" id="product-category"></span>
+  <h1 class="product-detail-name" id="product-name"></h1>
+  <p class="product-detail-price" id="product-price"></p>
+  <p class="product-detail-description" id="product-description"></p>
+  <p class="store-hint">수량을 선택하고 장바구니에 담아보세요. 담으면 화면 아래에 알림이 표시됩니다.</p>
+  <div class="product-detail-qty-row">
+    <button type="button" class="qty-btn" id="qty-decrease" aria-label="수량 감소">&minus;</button>
+    <span class="qty-value" id="qty-value" aria-live="polite">1</span>
+    <button type="button" class="qty-btn" id="qty-increase" aria-label="수량 증가">+</button>
+  </div>
+  <button type="button" class="store-btn store-btn-primary" id="add-to-cart-btn">장바구니 담기</button>
+</div>
+```
+
+id 없음/매칭 실패 케이스: `#product-detail`을
+`<p class="state-message">상품을 찾을 수 없습니다. <a href="store.html">목록으로 돌아가기</a></p>`
+로 교체.
+
+### 4.3 `cart.html` — 장바구니 페이지
+
+```html
+<div class="cart-page-container">
+  <h1 class="store-title">장바구니</h1>
+  <p class="store-hint">수량을 바꾸거나 삭제할 수 있어요. 합계를 확인한 뒤 결제하기를 눌러주세요.</p>
+
+  <p id="cart-empty-state" class="state-message" hidden>장바구니가 비어 있습니다. <a href="store.html">쇼핑 계속하기</a></p>
+
+  <ul class="cart-list" id="cart-list"></ul>
+
+  <div class="cart-summary" id="cart-summary" hidden>
+    <div class="cart-summary-row">
+      <span>합계</span>
+      <span class="cart-summary-total" id="cart-total">$0.00</span>
+    </div>
+    <a href="checkout.html" class="store-btn store-btn-primary cart-checkout-link" id="checkout-link">결제하기</a>
+  </div>
+</div>
+```
+
+`cart-list` 항목:
+
+```html
+<li class="cart-item" data-id="P1">
+  <img class="cart-item-image" src="..." alt="">
+  <div class="cart-item-info">
+    <h2 class="cart-item-name">오버이어 헤드폰</h2>
+    <p class="cart-item-price">$549.00</p>
+  </div>
+  <div class="cart-item-qty-row">
+    <button type="button" class="qty-btn cart-qty-decrease" aria-label="수량 감소">&minus;</button>
+    <span class="qty-value cart-qty-value">2</span>
+    <button type="button" class="qty-btn cart-qty-increase" aria-label="수량 증가">+</button>
+  </div>
+  <p class="cart-item-subtotal">$1098.00</p>
+  <button type="button" class="cart-item-remove" aria-label="오버이어 헤드폰 삭제">삭제</button>
+</li>
+```
+
+장바구니가 비면 `#cart-list`를 비우고 `#cart-empty-state` 표시 + `#cart-summary` 숨김.
+
+### 4.4 `checkout.html` — 결제 페이지
+
+```html
+<div class="checkout-container" id="checkout-form-view">
+  <h1 class="store-title">결제</h1>
+  <p class="store-hint">배송지와 결제 정보를 입력하세요. 실제 결제는 이뤄지지 않는 프론트엔드 데모입니다.</p>
+
+  <p id="checkout-empty-state" class="state-message" hidden>장바구니가 비어 있어 결제를 진행할 수 없습니다. <a href="store.html">쇼핑하러 가기</a></p>
+
+  <form id="checkout-form" class="checkout-form" novalidate>
+    <fieldset class="checkout-fieldset">
+      <legend>배송지 정보</legend>
+      <label class="checkout-field">
+        <span>이름</span>
+        <input type="text" id="checkout-name" autocomplete="name" required>
+        <span class="checkout-error" id="error-name"></span>
+      </label>
+      <label class="checkout-field">
+        <span>주소</span>
+        <input type="text" id="checkout-address" autocomplete="street-address" required>
+        <span class="checkout-error" id="error-address"></span>
+      </label>
+      <label class="checkout-field">
+        <span>우편번호</span>
+        <input type="text" id="checkout-zip" inputmode="numeric" autocomplete="postal-code" required>
+        <span class="checkout-error" id="error-zip"></span>
+      </label>
+    </fieldset>
+
+    <fieldset class="checkout-fieldset">
+      <legend>결제 정보</legend>
+      <label class="checkout-field">
+        <span>카드 번호</span>
+        <input type="text" id="checkout-card-number" inputmode="numeric" maxlength="19" placeholder="0000 0000 0000 0000" autocomplete="cc-number" required>
+        <span class="checkout-error" id="error-card-number"></span>
+      </label>
+      <div class="checkout-field-row">
+        <label class="checkout-field">
+          <span>유효기간(MM/YY)</span>
+          <input type="text" id="checkout-card-expiry" placeholder="MM/YY" maxlength="5" autocomplete="cc-exp" required>
+          <span class="checkout-error" id="error-card-expiry"></span>
+        </label>
+        <label class="checkout-field">
+          <span>CVC</span>
+          <input type="text" id="checkout-card-cvc" inputmode="numeric" maxlength="4" autocomplete="cc-csc" required>
+          <span class="checkout-error" id="error-card-cvc"></span>
+        </label>
+      </div>
+    </fieldset>
+
+    <div class="checkout-summary" id="checkout-summary"></div>
+
+    <button type="submit" class="store-btn store-btn-primary" id="checkout-submit-btn">주문 완료하기</button>
+  </form>
+</div>
+
+<div class="checkout-complete" id="checkout-complete-view" hidden>
+  <h1 class="store-title">주문이 완료되었습니다</h1>
+  <p class="store-hint" id="checkout-complete-message"></p>
+  <a href="store.html" class="store-btn store-btn-primary">쇼핑 계속하기</a>
+</div>
+```
+
+`#checkout-summary`에는 JS가 장바구니 각 아이템(이름 × 수량 — 소계)과 총합을 텍스트로
+렌더링한다(상세 마크업은 Work 단계 재량, 예: `<div class="checkout-summary-row">이름 × 2 — $1098.00</div>` 반복 + 총합 행).
+
+---
+
+## 5. 인터랙션
+
+### 5.1 카테고리 필터 (`store.html`)
+- `#store-filter-group` 안 버튼들은 `js/store.js`가 `STORE_PRODUCTS`의 고유 카테고리로
+  동적 생성(순서: 데이터에 처음 등장하는 순서, "전체"가 항상 맨 앞).
+- 클릭 시 `data-category` 값을 현재 필터 상태로 저장, 클릭된 버튼에만 `.is-active` 부여
+  (나머지 제거), `#store-grid` 재렌더링.
+- `all`이면 전체 표시, 그 외엔 `product.category === 선택값`만 표시.
+- 정렬 상태는 필터와 독립적으로 유지되고, 필터가 바뀌어도 정렬은 유지된다(재렌더링 시 필터 후 정렬 적용).
+
+### 5.2 정렬 (`store.html`)
+- `#store-sort-select` 변경 시 현재 필터링된 목록을 정렬해서 다시 렌더링.
+  - `default`: `STORE_PRODUCTS` 원래 순서(= id 순서, P1~P10)
+  - `price-asc`: 가격 오름차순
+  - `price-desc`: 가격 내림차순
+- 원본 배열을 변형하지 않고 항상 복사본을 정렬(`slice()`).
+
+### 5.3 장바구니 담기 + toast (`product.html`)
+- 수량 선택기(`#qty-decrease`/`#qty-increase`)는 1 미만으로 내려가지 않음(최소 1). 상한은
+  없음(요구사항에 없으므로 미제한, 다만 999 등 상식적 상한을 두는 건 Work 단계 재량).
+- `#add-to-cart-btn` 클릭 시 `CartStore.addItem(product, qty)` 호출 → 이미 담긴 상품이면
+  수량 누적, 없으면 신규 추가.
+- 담기 성공 시 toast 표시: `#store-toast`에 `"{상품명}을(를) 장바구니에 담았습니다."` 텍스트
+  세팅 → `hidden` 제거 + `.is-visible` 클래스 추가(트랜지션으로 아래에서 위로 슬라이드 +
+  페이드인) → 약 2000~2500ms 후 `.is-visible` 제거하고 트랜지션 종료 후(`transitionend` 또는
+  타임아웃) `hidden` 재설정. 연속 클릭 시 기존 타이머를 `clearTimeout`하고 새로 시작(토스트가
+  중간에 사라지지 않도록).
+- 담기 후 `#store-cart-count` 배지를 `CartStore.getTotalCount()`로 갱신.
+
+### 5.4 장바구니 수량 변경/삭제/합계 (`cart.html`)
+- `.cart-qty-increase`/`.cart-qty-decrease` 클릭 시 `CartStore.updateQty(id, newQty)` 호출.
+  `newQty`가 0 이하가 되면 해당 아이템 제거(확인 없이 바로 제거, 또는 삭제 버튼과 동일하게
+  처리 — Work 단계 재량이나 "0으로 감소 = 삭제"를 권장).
+- `.cart-item-remove` 클릭 시 `CartStore.removeItem(id)` 호출.
+- 위 두 액션 후: 장바구니 재조회 → 목록 재렌더링 → 각 줄의 소계(`price * qty`) 재계산 →
+  `#cart-total` 재계산(`CartStore.getTotalPrice()`) → 헤더 배지 갱신 → 비었으면 empty state.
+
+### 5.5 결제 폼 검증 (`checkout.html`)
+- 진입 시 장바구니가 비어 있으면 `#checkout-form-view`의 폼을 숨기고 `#checkout-empty-state`만 표시(주문 완료 화면으로 진행 불가).
+- `submit` 시 `preventDefault()`, 아래 규칙으로 모든 필드 검사, 에러 있으면:
+  - 해당 `.checkout-error`에 메시지 텍스트 삽입, 입력창에 `.has-error` 클래스(테두리 강조)
+  - 첫 번째 에러 필드에 `focus()`
+  - 제출 중단(주문 완료로 넘어가지 않음)
+- 검증 규칙:
+  | 필드 | 규칙 |
+  |---|---|
+  | 이름 | 공백 제거 후 1자 이상 |
+  | 주소 | 공백 제거 후 1자 이상 |
+  | 우편번호 | 숫자로만 구성된 5자리 (`/^\d{5}$/`) |
+  | 카드 번호 | 공백 제거 후 숫자만 13~19자리 (`/^\d{13,19}$/`) — Luhn 검증 등 실제 카드 검증 로직은 불필요 |
+  | 유효기간 | `MM/YY` 형식, MM은 01~12 (`/^(0[1-9]|1[0-2])\/\d{2}$/`) |
+  | CVC | 숫자 3~4자리 (`/^\d{3,4}$/`) |
+- 전부 통과하면:
+  1. 주문번호 생성(예: `"ORD-" + Date.now().toString().slice(-8)`)
+  2. `CartStore.clearCart()` 호출로 장바구니 비우기
+  3. `#checkout-form-view` 숨기고 `#checkout-complete-view` 표시
+  4. `#checkout-complete-message`에 `"주문번호 {orderId}가 접수되었습니다. 결제 금액 {formatPrice(total)}"` 형태로 채움(비우기 전에 합계를 변수로 미리 저장해둘 것 — clearCart 후에는 0이 됨)
+  5. 헤더 배지도 0으로 갱신
+
+---
+
+## 6. 팔레트/색상 매핑
+
+새 색상 토큰을 만들지 않는다. `css/style.css`의 기존 변수만 사용:
+
+| 용도 | 변수 |
+|---|---|
+| 페이지/카드 배경 | `--color-bg`, `--color-bg-elevated` |
+| 본문 텍스트 | `--color-text` |
+| 보조 텍스트(설명, 힌트, 카테고리 라벨) | `--color-text-secondary` |
+| 테두리(카드, 인풋, 필터 버튼 비활성) | `--color-border` |
+| 강조(활성 필터, 가격, 버튼 테두리, 포커스, 토스트 배경 테두리) | `--accent` |
+| 그림자/네온 글로우(카드 hover, 버튼 hover, 토스트) | `--glow-sm`, `--glow-lg` |
+| 제목/버튼/가격 등 숫자·라벨류 폰트 | `--font-mono` |
+| 본문/설명 폰트 | `--font-sans` |
+| 폼 인풋 에러 상태 | `--color-text`/`--accent` 대비용 자체 빨강 계열은 쓰지 않고, 대신 `--accent` 테두리 두껍게 + 아이콘/텍스트로 에러를 표시(라이트/다크 모두 팔레트에 없는 색 추가 금지). 텍스트는 `.checkout-error`에 `color: var(--color-text-secondary)`를 기본으로 하되 필요 시 `--accent`로 강조. |
+
+라이트/다크 모두 `[data-theme]`/`prefers-color-scheme`으로 style.css가 이미 처리하므로
+store.css는 변수만 참조하면 자동으로 대응된다. 다크 모드 전용 오버라이드를 store.css에
+새로 만들 필요 없음.
+
+---
+
+## 7. 헤더 nav 통합 방법
+
+`.claude/skills/webapp-blog/SKILL.md`에 정의된 공용 헤더는 byte-identical해야 한다.
+"Store" 링크를 `<a class="site-nav-link" href="pixel-art.html">Pixel Art</a>` 바로 뒤에
+추가:
 
 ```html
 <nav class="site-nav">
   <a class="site-nav-link" href="game.html">2048</a>
   <a class="site-nav-link" href="pixel-art.html">Pixel Art</a>
+  <a class="site-nav-link" href="store.html">Store</a>
 </nav>
 ```
 
-**네 개 헤더 파일 모두** 동일하게 반영해야 한다 (2048 리뷰에서 href 오타 여부까지 확인했던 것과
-같은 기준으로, 이번에도 4개 파일의 nav가 문자 그대로 동일한지 Review 단계에서 대조 확인):
+이 nav 블록을 **8개 파일 전부**(`index.html`, `post.html`, `game.html`, `pixel-art.html`,
+`store.html`, `product.html`, `cart.html`, `checkout.html`)에 문자 그대로 동일하게 넣는다.
+Work 단계에서 한 서브에이전트(9번 섹션의 "기반" 서브에이전트)가 이 8개 파일의 헤더를 전부
+책임지고, 이후 다른 서브에이전트는 헤더를 건드리지 않는다 — 이렇게 해야 byte-identical이
+깨지지 않는다. 완료 후 `grep -A5 'site-nav"' *.html`로 8개 파일 모두 동일한지 diff 대조.
 
-- `index.html`
-- `post.html`
-- `game.html`
-- `pixel-art.html` (자기 자신의 헤더에도 "2048"과 "Pixel Art" 링크를 그대로 둔다 — game.html이
-  자기 자신 헤더에 "2048" 링크를 그대로 두는 기존 관례와 동일)
+---
 
-라벨은 "Pixel Art"(영문, "2048"과 마찬가지로 짧고 대문자/고유명사 톤)로 결정한다 — 기존 "2048"
-링크가 숫자 그대로 라벨링된 것처럼, 기능명을 그대로 쓰는 편이 사이트의 미니멀한 nav 톤과
-맞는다. 한글 라벨("픽셀 아트")은 다른 nav 항목과 톤이 어긋나므로 채택하지 않는다.
+## 8. 사용법 안내 문구 (페이지별)
 
-## 9. Work 단계 서브에이전트 분배 권장
+- `store.html`: "카테고리로 필터링하고 가격순으로 정렬해서 상품을 둘러보세요. 상품을 클릭하면 상세 정보를 볼 수 있어요." (`.store-hint`)
+- `product.html`: "수량을 선택하고 장바구니에 담아보세요. 담으면 화면 아래에 알림이 표시됩니다." (`.store-hint`)
+- `cart.html`: "수량을 바꾸거나 삭제할 수 있어요. 합계를 확인한 뒤 결제하기를 눌러주세요." (`.store-hint`)
+- `checkout.html`: "배송지와 결제 정보를 입력하세요. 실제 결제는 이뤄지지 않는 프론트엔드 데모입니다." (`.store-hint`)
 
-이 기능도 2048과 동일하게 CLAUDE.md 기준 "화면 3개 이상"에 해당하지 않는다 — 신규 화면은
-`pixel-art.html` 1개뿐이고, `index.html`/`post.html`/`game.html` 수정은 각각 nav 링크 한 줄
-추가에 불과하다. 2048 spec과 동일한 근거로 **2개 서브에이전트로 분리**할 것을 권장한다(마크업/
-스타일 vs. 로직으로 파일 경계가 자연스럽게 갈리기 때문):
+`.store-hint` 클래스는 store.css에서 `.game-hint`/`.pixel-art-hint`와 비슷한 스타일
+(`color: var(--color-text-secondary)`, 여백)로 정의한다.
 
-1. **서브에이전트 A — 마크업/스타일/헤더 통합**
-   - 범위: `pixel-art.html` 생성, `css/pixel-art.css` 생성, `index.html`/`post.html`/`game.html`/
-     `pixel-art.html` 4개 파일의 헤더 nav에 "Pixel Art" 링크 추가
-   - 산출물: 정적 마크업 + 스타일만 완성된 상태(빈 캔버스, 팔레트 스와치 정적 표시, 버튼까지
-     보이되 아직 아무 동작도 하지 않는 상태로 확인 가능해야 함)
-   - `js/pixel-art.js`는 만들지 않되, `pixel-art.html`에 `<script src="js/pixel-art.js"></script>`
-     태그는 미리 추가해 둔다 (파일이 아직 없어도 404는 개발 중에만 발생, B가 채움)
-   - DOM 계약을 정확히 지켜야 함: `#pixel-canvas`(width/height=512 속성 포함), `#palette`,
-     `#custom-color-picker`, `#clear-btn`, `#save-btn` (5, 6, 7, 8장에 명시된 id 그대로)
+---
 
-2. **서브에이전트 B — 캔버스 로직 (그리기 상태 · 페인팅 · 팔레트 · 내보내기)**
-   - 범위: `js/pixel-art.js` 전체 (3, 5, 6, 7장의 상태/인터랙션/내보내기 로직)
-   - 전제: 서브에이전트 A가 만든 `pixel-art.html`의 DOM id(`#pixel-canvas`, `#palette`,
-     `#custom-color-picker`, `#clear-btn`, `#save-btn`)를 그대로 셀렉터로 사용
-   - A를 먼저 실행해 완료시킨 뒤 B를 순차 진행 — 2048 때와 같은 이유(DOM 계약이 먼저 확정돼야
-     B가 정확히 바인딩 가능)로 완전 병렬화하지 않는다.
+## 9. 서브에이전트 분할 계획 (Work 단계)
 
-두 서브에이전트 모두 지침 파일(`.md`)에 이 spec.md의 해당 섹션(A는 2, 4, 7, 8 / B는 2, 3, 5, 6, 7)을
-그대로 포함해 전달한다. Review 단계에서는 클릭/드래그 페인팅, 팔레트 색상 전환, 지우개, 커스텀
-색상 피커, Clear 버튼, Save PNG로 받은 파일이 실제로 16x16 도트가 투명 배경 위에 정확히 찍힌
-512x512 PNG인지, 헤더 nav 4파일 일관성, 다크/라이트 테마, 반응형을 함께 점검한다. **2048 리뷰에서
-정적 코드 리뷰만으로는 실제 렌더링 버그(그리드 stretch 깨짐)를 못 잡아냈던 전례가 있으므로, 이번
-Review도 반드시 실제 브라우저(가능하면 claude-in-chrome)로 캔버스 렌더링과 PNG 다운로드 결과물을
-직접 확인해야 한다** — 코드가 spec과 일치해 보인다는 것만으로 Pass 처리하지 않는다.
+화면 4개(목록/상세/장바구니/결제) → CLAUDE.md 규칙상 화면별로 분할. 공용 기반(CSS 셸,
+카트 모듈, 상품 데이터, 헤더 nav, 4개 신규 페이지의 헤더/토대)을 먼저 만드는 서브에이전트가
+선행되어야 하므로 총 **5개** 서브에이전트를 다음 순서로 실행한다(0번이 끝난 뒤 1~4번은
+서로 독립적이라 병렬 진행 가능).
+
+### 0. 기반(Foundation) — 선행, 단독 실행
+**만드는 파일**: `css/store.css`, `js/cart-store.js`, `js/products-data.js`
+**수정 파일**: `index.html`, `post.html`, `game.html`, `pixel-art.html` (nav에 Store 링크 추가)
+**만드는 파일(스켈레톤)**: `store.html`, `product.html`, `cart.html`, `checkout.html`
+각각 `<!DOCTYPE html>`부터 `</html>`까지 전체를 생성하되 `<main>` 내부는 4번 섹션의 공통
+구조(`back-link` + `store-topbar`)까지만 채우고, 페이지 고유 콘텐츠 자리에는
+`<!-- SCREEN CONTENT: store-list -->` 같은 명확한 주석 placeholder만 남긴다. `<head>`에는
+`css/style.css`, `css/store.css`, `js/theme.js`를 포함하고, `</body>` 직전에
+`js/products-data.js`(필요한 페이지만) → `js/cart-store.js` → 페이지별 스크립트(아직
+없으므로 `<script src="js/store.js" defer></script>` 등으로 경로만 미리 적어둠, 1~4번
+서브에이전트가 실제 파일을 만듦) → `BlogTheme.initThemeToggle("theme-toggle")` 순서로 배치.
+
+**계약(다음 서브에이전트들에게 그대로 전달)**:
+- `window.STORE_PRODUCTS`: 3.1의 배열 스키마, 3.3의 10개 데이터 그대로.
+- `window.CartStore` API:
+  - `CartStore.getCart()` → 3.4 스키마의 배열 반환(파싱 실패/미존재 시 `[]`)
+  - `CartStore.addItem(product, qty)` → product는 `{id,name,price,image}` 최소 포함 객체
+  - `CartStore.updateQty(id, qty)` → `qty <= 0`이면 제거
+  - `CartStore.removeItem(id)`
+  - `CartStore.clearCart()`
+  - `CartStore.getTotalCount()` → 전체 qty 합
+  - `CartStore.getTotalPrice()` → 전체 price*qty 합(숫자)
+  - `CartStore.formatPrice(amount)` → `"$" + amount.toFixed(2)` 문자열 (모든 페이지가 동일 포맷 사용하도록 공용화)
+  - localStorage 키: `"storeCart"`. `JSON.parse` 실패 시 콘솔 경고 후 `[]`로 취급(throw 금지).
+- DOM 계약: `#store-cart-count`(전 페이지 공통), 4.1~4.4의 id/class 전부.
+- 헤더 nav는 8개 파일 모두 byte-identical(7번 섹션대로) — 이후 서브에이전트는 헤더를 손대지 않는다.
+
+### 1. 목록 페이지
+**수정**: `store.html`(placeholder를 4.1 마크업으로 교체)
+**생성**: `js/store.js`
+**참조만(수정 금지)**: `css/store.css`, `js/cart-store.js`, `js/products-data.js`
+구현: 5.1(필터)/5.2(정렬) 전체, `#store-cart-count` 초기 렌더.
+
+### 2. 상세 페이지
+**수정**: `product.html`
+**생성**: `js/product.js`
+구현: URL `?id=` 파싱, not-found 처리, 5.3(담기+toast) 전체.
+
+### 3. 장바구니 페이지
+**수정**: `cart.html`
+**생성**: `js/cart.js`
+구현: 5.4(수량/삭제/합계) 전체, empty state.
+
+### 4. 결제 페이지
+**수정**: `checkout.html`
+**생성**: `js/checkout.js`
+구현: 5.5(폼 검증 + 주문 완료) 전체, 빈 장바구니 가드.
+
+각 서브에이전트는 지침 파일(`work-store-0.md` ~ `work-store-4.md`)에 위 범위와 4번/5번/6번
+섹션의 해당 부분을 그대로 옮겨 전달한다. 1~4번은 서로 다른 html/js 파일만 건드리므로 병렬
+진행 가능하나, 반드시 0번이 완료(특히 CartStore API와 스켈레톤 HTML)된 뒤에 시작한다.
+
+---
 
 ## 10. 다음에 열 때 참고
 
-- **2048 리뷰에서 얻은 핵심 교훈**: `display: grid` 컨테이너의 자식 엘리먼트에 `position: absolute`
-  (또는 `fixed`)를 걸면 grid 아이템에 기본 적용되는 `align-self`/`justify-self: stretch`가
-  무효화되어, 셀을 꽉 채우는 대신 콘텐츠 크기만큼만(예: 텍스트 크기만큼 작게) 렌더링된다. 이
-  버그는 정적 코드 리뷰로는 잡히지 않고 실제 브라우저 렌더링에서만 드러났다(review.md 참고).
-- **이번 스펙에는 이 위험이 구조적으로 없다.** 4.1절에서 이미 명시했듯, 픽셀 아트 그리기 표면을
-  256개 DOM 셀(및 CSS Grid) 대신 단일 `<canvas>`로 설계한 것 자체가 이 버그 클래스를 원천
-  차단하기 위한 선택이다 — 캔버스는 `position`이나 grid 정렬에 의존하지 않고 `fillRect` 좌표
-  계산만으로 그려지기 때문에 "그리드 아이템이 stretch되지 않는" 상황 자체가 존재하지 않는다.
-- 다만 이 스펙에서 CSS Grid를 쓰는 곳이 아예 없는 것은 아니다 — `.pixel-art-workspace`(캔버스 +
-  사이드바 2단 레이아웃, 4.2절)에 Grid/Flexbox를 쓸 경우, 그 자식들(`.canvas-wrap`,
-  `.pixel-art-sidebar`)에는 `position: absolute`를 걸 이유가 없으므로 동일한 위험은 없다. 만약
-  구현 중 오버레이(로딩 표시, 저장 완료 토스트 등)를 추가하게 된다면, `game.html`의
-  `.game-overlay`처럼 `position: absolute`를 쓰는 대상이 **grid의 직접 자식이 아니라
-  `position: relative`가 걸린 별도 래퍼(`.canvas-wrap`) 안**이어야 한다는 점을 다시 한번 확인할 것
-  (`.game-overlay`도 실제로는 `.game-board-wrap`이라는 `position: relative` 래퍼 안에 있어서 이
-  문제를 겪지 않았다 — grid 컨테이너 자체의 직접 자식이었던 `.tile`만 문제였다).
-- Review 단계에서 claude-in-chrome이 연결되지 않을 경우를 대비해, 정적 코드 리뷰로 대체하더라도
-  "실제 브라우저 확인을 못 했다"는 한계를 review.md에 명시하고, 가능해지는 즉시(또는 배포 후)
-  반드시 실제 렌더링과 PNG 다운로드 결과물을 열어서 확인하는 절차를 spec 승인 시점부터 미리
-  못박아 둔다 — 2048 때도 이 단계를 건너뛰지 않아서 치명적 버그를 잡을 수 있었다.
+- **CSS Grid + `position:absolute` 버그(2048 사례)**: `store-grid`(`display:grid`)의 자식인
+  `.store-card`에는 `position: absolute`를 걸지 않는다. 카드 위에 배지/오버레이가 필요하면
+  `.store-card` 내부에 `position: relative` 래퍼를 하나 더 두고 그 안에서 절대 위치를 쓴다
+  (Pixel Art의 `.canvas-wrap` 패턴과 동일).
+- **테마 전환 시 캔버스 미갱신 버그**: 이번 기능은 `<canvas>`나 `getComputedStyle` 직접
+  페인팅을 쓰지 않으므로(전부 CSS로 스타일링) 해당 사례와 무관. 참고로 현재
+  `js/theme.js`는 SKILL.md 문서에 적힌 것과 달리 실제로는 토글 시 `document`에
+  `"blogthemechange"` CustomEvent를 발행한다(커밋 `76e8753` 리뷰 수정 이후). 이번 기능에서
+  캔버스류 재렌더링이 필요 없으므로 사용하지 않아도 되지만, 혹시 다크모드에 따라 JS 로직을
+  분기해야 할 일이 생기면 MutationObserver 대신 이 이벤트를 구독하는 편이 더 간단하다.
+- **localStorage 파싱 실패 처리**: `cart-store.js`의 모든 읽기는 `try/catch`로 감싸고,
+  `JSON.parse` 결과가 배열이 아니거나 실패하면 빈 배열로 취급한다(다른 웹앱이 같은 키를
+  건드릴 일은 없지만, 사용자가 devtools로 값을 손상시켜도 페이지가 죽지 않아야 함). 쓰기도
+  `try/catch`로 감싸 storage 비활성 환경에서 페이지가 죽지 않게 한다(`theme.js`의
+  `getStoredTheme`/`setStoredTheme` 패턴 참고).
+- **여러 탭 동기화**: 필수 요구사항 아님(요청에 없음). 구현하지 않아도 되지만, 저렴하게
+  붙일 수 있다면 각 페이지에서 `window.addEventListener("storage", handler)`로 다른 탭에서
+  장바구니가 바뀌었을 때 배지/목록을 새로고침하는 것을 선택적으로 고려할 수 있다(같은 탭
+  내부에서 `setItem`을 호출한 탭 자신에는 `storage` 이벤트가 발생하지 않는다는 점 주의 —
+  자기 탭은 각 액션 직후 직접 재렌더링해야 함, 이는 5번 섹션에서 이미 그렇게 설계함).
+- **상품 상세 진입 방식**: `product.html?id=P1`처럼 쿼리 파라미터로 전달한다. `id`가
+  없거나 `STORE_PRODUCTS`에 없는 값이면 not-found 상태를 보여주고 500 에러나 흰 화면이
+  되지 않게 한다(4.2 참고). 정적 사이트라 서버 라우팅이 없으므로 항상 클라이언트에서
+  `URLSearchParams`로 처리.
+- **주문 완료 후 합계 표시**: `CartStore.clearCart()`를 호출하면 합계가 0이 되므로, 완료
+  메시지에 넣을 총액/상품 요약은 clearCart 호출 **이전**에 변수로 저장해둔다(5.5 참고).
+- **카드 정보 자동완성**: 실제 결제가 아니므로 Luhn 체크섬 등 진짜 카드 검증은 구현하지
+  않는다(5.5의 정규식 수준으로 충분). `autocomplete` 속성은 접근성/UX 상 붙여두되, 이 값이
+  실제로 어딘가에 전송되지 않는다는 점을 결제 폼 상단 안내 문구로 명시한다(이미 8번 힌트에
+  포함됨).
