@@ -33,12 +33,26 @@ function parseFrontmatter(raw) {
   return { meta, body };
 }
 
+// Only allow schemes that can't execute script when clicked/loaded. Anything
+// else (javascript:, data:, vbscript:, ...) is replaced with "#" — escapeHtml
+// alone stops attribute-escape, but not a dangerous scheme inside a valid href.
+function sanitizeUrl(url) {
+  const trimmed = url.trim();
+  if (/^(https?:|mailto:|tel:)/i.test(trimmed)) return url;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) return "#";
+  return url; // relative path or fragment, no scheme
+}
+
 function renderInline(text) {
   let out = escapeHtml(text);
   // images ![alt](url)
-  out = out.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, '<img src="$2" alt="$1">');
+  out = out.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, function (m, alt, url) {
+    return `<img src="${sanitizeUrl(url)}" alt="${alt}">`;
+  });
   // links [text](url)
-  out = out.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2">$1</a>');
+  out = out.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function (m, label, url) {
+    return `<a href="${sanitizeUrl(url)}">${label}</a>`;
+  });
   // bold **text**
   out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   // italic *text*

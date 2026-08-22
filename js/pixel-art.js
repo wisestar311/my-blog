@@ -23,10 +23,22 @@
     "#00ffa2", // neon green accent
   ];
 
+  const PALETTE_NAMES = [
+    "시안(강조색)",
+    "흰색", "밝은 회색", "회색", "어두운 회색", "검정",
+    "빨강", "주황", "노랑",
+    "초록", "짙은 초록",
+    "청록", "파랑", "보라",
+    "마젠타", "분홍",
+    "갈색", "황토색", "연한 살구색",
+    "네온 초록",
+  ];
+
   let grid = []; // 16x16 2D array. Each cell is a hex color string or null (empty/transparent)
   let selectedColor = PALETTE_COLORS[0]; // currently selected color
 
   let isPointerDown = false;
+  let lastPaintedCell = null; // { row, col } | null — used to bridge fast drags
 
   const canvasEl = document.getElementById("pixel-canvas");
   const ctx = canvasEl.getContext("2d");
@@ -80,20 +92,57 @@
     drawCell(row, col);
   }
 
+  // Bresenham's line algorithm — paints every cell between two grid
+  // coordinates so a fast drag (pointermove events arriving more than one
+  // cell apart) doesn't leave gaps.
+  function paintLine(fromRow, fromCol, toRow, toCol) {
+    let x0 = fromCol;
+    let y0 = fromRow;
+    const x1 = toCol;
+    const y1 = toRow;
+    const dx = Math.abs(x1 - x0);
+    const dy = -Math.abs(y1 - y0);
+    const sx = x0 < x1 ? 1 : -1;
+    const sy = y0 < y1 ? 1 : -1;
+    let err = dx + dy;
+    while (true) {
+      paintCell(y0, x0);
+      if (x0 === x1 && y0 === y1) break;
+      const e2 = 2 * err;
+      if (e2 >= dy) {
+        err += dy;
+        x0 += sx;
+      }
+      if (e2 <= dx) {
+        err += dx;
+        y0 += sy;
+      }
+    }
+  }
+
   function paintAtEvent(e) {
     const rect = canvasEl.getBoundingClientRect();
     const scaleX = canvasEl.width / rect.width; // correct for CSS-scaled display size
     const scaleY = canvasEl.height / rect.height;
     const col = Math.floor(((e.clientX - rect.left) * scaleX) / CELL_PX);
     const row = Math.floor(((e.clientY - rect.top) * scaleY) / CELL_PX);
-    if (row < 0 || row >= GRID_SIZE || col < 0 || col >= GRID_SIZE) return; // dragged outside canvas
-    paintCell(row, col);
+    if (row < 0 || row >= GRID_SIZE || col < 0 || col >= GRID_SIZE) {
+      lastPaintedCell = null; // dragged outside — don't bridge across the gap on re-entry
+      return;
+    }
+    if (lastPaintedCell) {
+      paintLine(lastPaintedCell.row, lastPaintedCell.col, row, col);
+    } else {
+      paintCell(row, col);
+    }
+    lastPaintedCell = { row: row, col: col };
   }
 
   canvasEl.addEventListener("pointerdown", function (e) {
     if (e.button !== 0) return; // primary button only
     isPointerDown = true;
     canvasEl.setPointerCapture(e.pointerId); // keep receiving move/up outside canvas bounds
+    lastPaintedCell = null;
     paintAtEvent(e);
   });
 
@@ -102,6 +151,7 @@
     if ((e.buttons & 1) === 0) {
       // safety net: button no longer pressed (e.g. missed a mouseup outside the canvas)
       isPointerDown = false;
+      lastPaintedCell = null;
       return;
     }
     paintAtEvent(e);
@@ -109,15 +159,18 @@
 
   canvasEl.addEventListener("pointerup", function () {
     isPointerDown = false;
+    lastPaintedCell = null;
   });
   canvasEl.addEventListener("pointercancel", function () {
     isPointerDown = false;
+    lastPaintedCell = null;
   });
 
   function clearPaletteSelection() {
     const swatches = paletteEl.querySelectorAll(".palette-swatch");
     swatches.forEach(function (swatch) {
       swatch.classList.remove("selected");
+      swatch.setAttribute("aria-pressed", "false");
     });
   }
 
@@ -127,7 +180,8 @@
       btn.className = "palette-swatch";
       btn.dataset.color = color;
       btn.style.background = color;
-      btn.setAttribute("aria-label", "색상 선택");
+      btn.setAttribute("aria-label", PALETTE_NAMES[index] || "색상 선택");
+      btn.setAttribute("aria-pressed", index === 0 ? "true" : "false");
       if (index === 0) {
         btn.classList.add("selected");
       }
@@ -135,6 +189,7 @@
         selectedColor = color;
         clearPaletteSelection();
         btn.classList.add("selected");
+        btn.setAttribute("aria-pressed", "true");
       });
       paletteEl.appendChild(btn);
     });
@@ -143,10 +198,12 @@
     eraserBtn.className = "palette-swatch palette-swatch-eraser";
     eraserBtn.dataset.color = "";
     eraserBtn.setAttribute("aria-label", "지우개");
+    eraserBtn.setAttribute("aria-pressed", "false");
     eraserBtn.addEventListener("click", function () {
       selectedColor = null;
       clearPaletteSelection();
       eraserBtn.classList.add("selected");
+      eraserBtn.setAttribute("aria-pressed", "true");
     });
     paletteEl.appendChild(eraserBtn);
   }
@@ -183,6 +240,10 @@
     }
 
     exportCanvas.toBlob(function (blob) {
+      if (!blob) {
+        window.alert("PNG로 저장하지 못했습니다. 다시 시도해 주세요.");
+        return;
+      }
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -201,12 +262,12 @@
     renderPalette();
     renderAll();
 
-    // Re-paint empty cells / grid lines with the new theme's colors when the
-    // site's dark/light toggle flips data-theme (js/theme.js owns that attribute).
-    new MutationObserver(renderAll).observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["data-theme"],
-    });
+    // Re-paint empty cells / grid lines with the new theme's colors whenever
+    // the effective theme changes — an explicit toggle click, or (since this
+    // page may never set data-theme at all) the OS-level scheme changing
+    // while no explicit preference is stored. js/theme.js dispatches this on
+    // both cases.
+    document.addEventListener("blogthemechange", renderAll);
   }
 
   init();

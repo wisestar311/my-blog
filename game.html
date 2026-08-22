@@ -27,7 +27,7 @@
       <div class="game-header-row">
         <h1 class="game-title">2048</h1>
         <div class="scoreboard">
-          <div class="score-box" id="score-box">
+          <div class="score-box" id="score-box" aria-live="polite" aria-atomic="true">
             <span class="score-label">SCORE</span>
             <span class="score-value" id="score-value">0</span>
           </div>
@@ -39,7 +39,7 @@
       </div>
 
       <div class="game-controls-row">
-        <p class="game-hint">방향키로 타일을 움직여 합치세요.</p>
+        <p class="game-hint">방향키, 스와이프, 또는 아래 버튼으로 타일을 움직여 합치세요.</p>
         <button id="new-game-btn" class="new-game-btn">New Game</button>
       </div>
 
@@ -62,11 +62,25 @@
           <div class="grid-cell"></div>
           <div class="grid-cell"></div>
         </div>
-        <div class="game-overlay" id="game-overlay" hidden>
+        <div
+          class="game-overlay"
+          id="game-overlay"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="game-overlay-message"
+          hidden
+        >
           <p class="game-overlay-message" id="game-overlay-message"></p>
           <button class="new-game-btn" id="overlay-restart-btn">Try Again</button>
           <button class="game-overlay-secondary" id="overlay-keep-playing-btn" hidden>Keep Playing</button>
         </div>
+      </div>
+
+      <div class="game-dpad" role="group" aria-label="방향 조작 버튼">
+        <button type="button" class="dpad-btn dpad-up" data-direction="up" aria-label="위로 밀기">&#9650;</button>
+        <button type="button" class="dpad-btn dpad-left" data-direction="left" aria-label="왼쪽으로 밀기">&#9664;</button>
+        <button type="button" class="dpad-btn dpad-right" data-direction="right" aria-label="오른쪽으로 밀기">&#9654;</button>
+        <button type="button" class="dpad-btn dpad-down" data-direction="down" aria-label="아래로 밀기">&#9660;</button>
       </div>
     </div>
   </main>

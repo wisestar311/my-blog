@@ -19,6 +19,7 @@
   let isGameOver = false;
   let hasWon = false;
   let keepPlayingAfterWin = false;
+  let isOverlayOpen = false;
 
   const boardEl = document.getElementById("game-board");
   const scoreValueEl = document.getElementById("score-value");
@@ -176,7 +177,11 @@
   function updateBestScore() {
     if (score > best) {
       best = score;
-      localStorage.setItem(BEST_SCORE_KEY, String(best));
+      try {
+        localStorage.setItem(BEST_SCORE_KEY, String(best));
+      } catch (err) {
+        // storage unavailable — best score just won't persist across reloads
+      }
     }
   }
 
@@ -188,10 +193,13 @@
       overlayKeepPlayingBtn.setAttribute("hidden", "");
     }
     overlayEl.removeAttribute("hidden");
+    isOverlayOpen = true;
+    overlayRestartBtn.focus();
   }
 
   function hideOverlay() {
     overlayEl.setAttribute("hidden", "");
+    isOverlayOpen = false;
   }
 
   function render() {
@@ -240,7 +248,7 @@
     const direction = keyMap[e.key];
     if (!direction) return;
     e.preventDefault();
-    if (isGameOver) return;
+    if (isGameOver || isOverlayOpen) return;
     move(direction);
   });
 
@@ -258,8 +266,63 @@
     hideOverlay();
   });
 
+  // On-screen direction pad — needed on touch devices with no arrow keys.
+  const dpadEl = document.querySelector(".game-dpad");
+  if (dpadEl) {
+    dpadEl.addEventListener("click", function (e) {
+      const btn = e.target.closest(".dpad-btn");
+      if (!btn) return;
+      if (isGameOver || isOverlayOpen) return;
+      move(btn.dataset.direction);
+    });
+  }
+
+  // Swipe gesture on the board itself, for touch devices. Mouse drags are
+  // left alone (mouse users already have the keyboard and the D-pad).
+  const boardWrapEl = document.querySelector(".game-board-wrap");
+  if (boardWrapEl) {
+    const MIN_SWIPE_PX = 24;
+    let swipeStartX = 0;
+    let swipeStartY = 0;
+    let isTrackingSwipe = false;
+
+    boardWrapEl.addEventListener("pointerdown", function (e) {
+      if (e.pointerType === "mouse") return;
+      isTrackingSwipe = true;
+      swipeStartX = e.clientX;
+      swipeStartY = e.clientY;
+    });
+
+    boardWrapEl.addEventListener("pointerup", function (e) {
+      if (!isTrackingSwipe) return;
+      isTrackingSwipe = false;
+      if (isGameOver || isOverlayOpen) return;
+      const dx = e.clientX - swipeStartX;
+      const dy = e.clientY - swipeStartY;
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < MIN_SWIPE_PX) return;
+      const direction =
+        Math.abs(dx) > Math.abs(dy)
+          ? dx > 0
+            ? "right"
+            : "left"
+          : dy > 0
+          ? "down"
+          : "up";
+      move(direction);
+    });
+
+    boardWrapEl.addEventListener("pointercancel", function () {
+      isTrackingSwipe = false;
+    });
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
-    const storedBest = localStorage.getItem(BEST_SCORE_KEY);
+    let storedBest = null;
+    try {
+      storedBest = localStorage.getItem(BEST_SCORE_KEY);
+    } catch (err) {
+      storedBest = null;
+    }
     best = storedBest ? parseInt(storedBest, 10) || 0 : 0;
     initGame();
   });

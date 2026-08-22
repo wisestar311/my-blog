@@ -49,6 +49,9 @@
   height: auto;
   image-rendering: pixelated;
   border-radius: 4px;
+  /* Without this, a touch drag that the browser reads as a scroll/zoom
+     gesture cancels the pointer stroke mid-draw (see pointercancel below). */
+  touch-action: none;
 }
 
 .pixel-art-sidebar {
