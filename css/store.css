@@ -1,6 +1,15 @@
 /* Store feature — reuses css/style.css custom properties only, no new tokens.
    Self-contained: does not depend on any other feature css (game.css, pixel-art.css). */
 
+/* Several store elements are toggled via the `hidden` attribute while also
+   carrying a class that sets `display: flex` (.checkout-complete, .checkout-form,
+   .cart-summary). An author-stylesheet `display` declaration always beats the
+   UA stylesheet's `[hidden] { display: none }` at equal specificity, so without
+   this rule those elements stay visible even while `hidden` is set. */
+[hidden] {
+  display: none !important;
+}
+
 .store-page {
   max-width: var(--wide-width);
 }
